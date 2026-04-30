@@ -11,6 +11,9 @@ public interface ISecurityContext
     /// <summary>Role membership of the caller. Empty for anonymous callers.</summary>
     IReadOnlySet<string> Roles { get; }
 
-    /// <summary>Optional claims (tenant, scope, sub, etc.). Empty by default.</summary>
+    /// <summary>Optional claims (tenant, scope, sub, etc.). Empty by default. Values are
+    /// strings; structured values (arrays, objects) should be JSON-encoded by the host that
+    /// populates this dictionary, and decoded by the policy that consumes them. Key
+    /// comparison is case-sensitive (<see cref="StringComparer.Ordinal"/>) by convention.</summary>
     IReadOnlyDictionary<string, string> Claims { get; }
 }

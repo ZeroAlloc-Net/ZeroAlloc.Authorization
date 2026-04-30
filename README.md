@@ -19,6 +19,10 @@ dotnet add package ZeroAlloc.Authorization
 
 Targets `net8.0`, `net9.0`, `net10.0`.
 
+> **Host required.** This package only ships the contract types. A host (AI.Sentinel, ZeroAlloc.Mediator.Authorization, your own dispatcher) must match `[Authorize]` to a registered `[AuthorizationPolicy]` and invoke `IsAuthorized` / `IsAuthorizedAsync` before dispatch.
+
+> **Note:** if you're in an ASP.NET Core project, `using ZeroAlloc.Authorization;` will collide with `using Microsoft.AspNetCore.Authorization;` over the `[Authorize]` name. Use a `using` alias (`using ZAuthorize = ZeroAlloc.Authorization;`) or fully-qualify one side at the call site.
+
 ## The contract
 
 ```csharp
@@ -56,8 +60,6 @@ public sealed class UserService
     public Task DeleteUserAsync(string userId) { ... }
 }
 ```
-
-The host (AI.Sentinel, ZeroAlloc.Mediator.Authorization, your own dispatcher) is responsible for matching `[Authorize]` to a registered `[AuthorizationPolicy]` and invoking the policy's `IsAuthorized` / `IsAuthorizedAsync` before dispatching the call.
 
 ## Hosts can extend `ISecurityContext`
 

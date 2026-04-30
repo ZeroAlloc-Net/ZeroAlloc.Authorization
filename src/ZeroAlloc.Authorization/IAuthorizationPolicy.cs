@@ -7,7 +7,10 @@ namespace ZeroAlloc.Authorization;
 public interface IAuthorizationPolicy
 {
     /// <summary>Returns true if the caller is allowed. Hosts may pass a richer subinterface
-    /// (e.g. <c>IToolCallSecurityContext</c>); downcast inside the policy body.</summary>
+    /// (e.g. <c>IToolCallSecurityContext</c>); downcast inside the policy body.
+    /// Implementations MAY throw <see cref="InvalidOperationException"/> if the policy is
+    /// fundamentally I/O-bound — hosts that cannot dispatch asynchronously should treat such
+    /// a throw as <c>Deny</c>, not as a fault.</summary>
     bool IsAuthorized(ISecurityContext ctx);
 
     /// <summary>I/O-bound override point. Default delegates to <see cref="IsAuthorized"/>

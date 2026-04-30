@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'release-please--**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-commits:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lint commit messages
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: .commitlintrc.yml
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Calculate version
+        id: gitversion
+        run: |
+          version=$(dotnet dotnet-gitversion /output json /showvariable SemVer)
+          echo "semver=$version" >> $GITHUB_OUTPUT
+          echo "Calculated version: $version"
+
+      - name: Restore
+        run: dotnet restore ZeroAlloc.Authorization.slnx
+
+      - name: Build
+        run: dotnet build ZeroAlloc.Authorization.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test ZeroAlloc.Authorization.slnx --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/*.trx"
+
+      - name: Pack (verify)
+        run: dotnet pack ZeroAlloc.Authorization.slnx --configuration Release --no-build --output ./artifacts
+
+      - name: Upload NuGet artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: ./artifacts/*.nupkg

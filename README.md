@@ -1,0 +1,90 @@
+# ZeroAlloc.Authorization
+
+[![NuGet](https://img.shields.io/nuget/v/ZeroAlloc.Authorization.svg)](https://www.nuget.org/packages/ZeroAlloc.Authorization)
+[![Build](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/actions/workflows/ci.yml/badge.svg)](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/MarcelRoozekrans?style=flat&logo=githubsponsors&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/MarcelRoozekrans)
+
+Authorization primitives for .NET. Five types — `ISecurityContext`, `IAuthorizationPolicy`, `[Authorize]`, `[AuthorizationPolicy]`, `AnonymousSecurityContext` — designed to be shared across hosts that need a unified policy contract.
+
+Used by:
+- [AI.Sentinel](https://github.com/MarcelRoozekrans/AI.Sentinel) — tool-call authorization for `IChatClient`-based agents
+- ZeroAlloc.Mediator.Authorization (planned) — request-handler authorization
+
+## Install
+
+```bash
+dotnet add package ZeroAlloc.Authorization
+```
+
+Targets `net8.0`, `net9.0`, `net10.0`.
+
+## The contract
+
+```csharp
+public interface ISecurityContext
+{
+    string Id { get; }
+    IReadOnlySet<string> Roles { get; }
+    IReadOnlyDictionary<string, string> Claims { get; }
+}
+
+public interface IAuthorizationPolicy
+{
+    bool IsAuthorized(ISecurityContext ctx);
+    ValueTask<bool> IsAuthorizedAsync(ISecurityContext ctx, CancellationToken ct = default)
+        => ValueTask.FromResult(IsAuthorized(ctx));
+}
+```
+
+## Writing a policy
+
+```csharp
+[AuthorizationPolicy("AdminOnly")]
+public sealed class AdminOnlyPolicy : IAuthorizationPolicy
+{
+    public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
+}
+```
+
+Bind it on a method:
+
+```csharp
+public sealed class UserService
+{
+    [Authorize("AdminOnly")]
+    public Task DeleteUserAsync(string userId) { ... }
+}
+```
+
+The host (AI.Sentinel, ZeroAlloc.Mediator.Authorization, your own dispatcher) is responsible for matching `[Authorize]` to a registered `[AuthorizationPolicy]` and invoking the policy's `IsAuthorized` / `IsAuthorizedAsync` before dispatching the call.
+
+## Hosts can extend `ISecurityContext`
+
+Hosts define their own subinterface for richer payloads. AI.Sentinel adds `IToolCallSecurityContext : ISecurityContext` with `ToolName` + `Args`. Mediator.Authorization will add `IRequestSecurityContext<TRequest>`. Inside the policy body, downcast:
+
+```csharp
+public bool IsAuthorized(ISecurityContext ctx)
+    => ctx is IToolCallSecurityContext tc && tc.ToolName != "delete_database";
+```
+
+## Async overrides
+
+For I/O-bound checks (tenant lookup, external claims validation), override `IsAuthorizedAsync`:
+
+```csharp
+public sealed class TenantPolicy(ITenantService tenants) : IAuthorizationPolicy
+{
+    public bool IsAuthorized(ISecurityContext ctx) =>
+        throw new InvalidOperationException("Use async — tenant lookup is I/O-bound.");
+
+    public async ValueTask<bool> IsAuthorizedAsync(ISecurityContext ctx, CancellationToken ct = default)
+        => await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+}
+```
+
+The host is responsible for calling the async overload.
+
+## License
+
+MIT.

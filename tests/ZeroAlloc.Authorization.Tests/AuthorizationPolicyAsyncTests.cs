@@ -52,7 +52,7 @@ public class AuthorizationPolicyAsyncTests
         using var cts = new CancellationTokenSource();
         var task = ((IAuthorizationPolicy)policy).IsAuthorizedAsync(AnonymousSecurityContext.Instance, cts.Token);
         cts.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await task);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await task.ConfigureAwait(false));
     }
 
     private sealed class SlowAsyncPolicy : IAuthorizationPolicy

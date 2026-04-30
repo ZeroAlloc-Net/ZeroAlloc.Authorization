@@ -4,7 +4,8 @@ namespace ZeroAlloc.Authorization;
 /// subinterfaces (e.g. tool-call context, request context) inside the policy body.</summary>
 public interface ISecurityContext
 {
-    /// <summary>Stable caller identifier — user, agent, or service name.</summary>
+    /// <summary>Stable caller identifier — user, agent, or service name. Non-null,
+    /// non-empty, stable for the lifetime of this context object.</summary>
     string Id { get; }
 
     /// <summary>Role membership of the caller. Empty for anonymous callers.</summary>

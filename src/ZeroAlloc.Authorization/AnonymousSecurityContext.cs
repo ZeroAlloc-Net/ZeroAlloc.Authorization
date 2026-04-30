@@ -6,13 +6,18 @@ namespace ZeroAlloc.Authorization;
 /// caller-provider is configured.</summary>
 public sealed class AnonymousSecurityContext : ISecurityContext
 {
+    /// <summary>The literal value of <see cref="ISecurityContext.Id"/> on the anonymous singleton.
+    /// Hosts MAY compare against this constant, but prefer reference-equality with
+    /// <see cref="Instance"/>.</summary>
+    public const string AnonymousId = "anonymous";
+
     /// <summary>Shared singleton instance used whenever no caller identity is configured.</summary>
     public static readonly AnonymousSecurityContext Instance = new();
 
     private AnonymousSecurityContext() { }
 
     /// <inheritdoc />
-    public string Id => "anonymous";
+    public string Id => AnonymousId;
 
     /// <inheritdoc />
     public IReadOnlySet<string> Roles { get; } = FrozenSet<string>.Empty;

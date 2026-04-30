@@ -64,4 +64,22 @@ public class AuthorizationPolicyAsyncTests
             return true;
         }
     }
+
+    [Fact]
+    public async Task AsyncDefault_PreCancelledToken_ThrowsOperationCanceled()
+    {
+        IAuthorizationPolicy policy = new SyncOnlyPolicy(true);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            async () => await policy.IsAuthorizedAsync(AnonymousSecurityContext.Instance, cts.Token).ConfigureAwait(false));
+    }
+
+    [Fact]
+    public async Task AsyncDefault_NullContext_ThrowsArgumentNullException()
+    {
+        IAuthorizationPolicy policy = new SyncOnlyPolicy(true);
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            async () => await policy.IsAuthorizedAsync(null!).ConfigureAwait(false));
+    }
 }

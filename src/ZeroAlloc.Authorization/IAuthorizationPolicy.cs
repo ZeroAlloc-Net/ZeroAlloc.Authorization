@@ -10,8 +10,13 @@ public interface IAuthorizationPolicy
     /// (e.g. <c>IToolCallSecurityContext</c>); downcast inside the policy body.</summary>
     bool IsAuthorized(ISecurityContext ctx);
 
-    /// <summary>I/O-bound override point. Default delegates to <see cref="IsAuthorized"/>.
-    /// Override to perform asynchronous lookups; honor <paramref name="ct"/> for cancellation.</summary>
+    /// <summary>I/O-bound override point. Default delegates to <see cref="IsAuthorized"/>
+    /// after honoring the supplied cancellation token. Override this method for
+    /// asynchronous lookups (tenant validation, claims resolution, etc.).</summary>
     ValueTask<bool> IsAuthorizedAsync(ISecurityContext ctx, CancellationToken ct = default)
-        => ValueTask.FromResult(IsAuthorized(ctx));
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        ct.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(IsAuthorized(ctx));
+    }
 }

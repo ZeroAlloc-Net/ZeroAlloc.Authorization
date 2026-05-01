@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj" />
+  <Project Path="samples/ZeroAlloc.Authorization.AotSmoke/ZeroAlloc.Authorization.AotSmoke.csproj" />
   <Project Path="tests/ZeroAlloc.Authorization.Tests/ZeroAlloc.Authorization.Tests.csproj" />
 </Solution>

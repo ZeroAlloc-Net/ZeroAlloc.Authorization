@@ -61,7 +61,7 @@ public sealed class UserService
 
 The contract is silent on combinator semantics — hosts decide whether multiple attributes mean "all must allow" (AND) or "any must allow" (OR). Existing hosts (AI.Sentinel, the planned Mediator.Authorization) treat the set as a conjunction: every policy must allow before the call dispatches.
 
-> **Note:** explicit composition (e.g. `[Authorize("A", Mode = AuthorizeMode.Any)]`) is on the [backlog](../../backlog.md) and may land in a 1.x minor release. Until then, relying on the host's documented combinator is correct.
+> **Note:** explicit composition (e.g. `[Authorize("A", Mode = AuthorizeMode.Any)]`) is on the [backlog](../backlog.md) and may land in a 1.x minor release. Until then, relying on the host's documented combinator is correct.
 
 ---
 

@@ -15,7 +15,6 @@ if (policy.IsAuthorized(AnonymousSecurityContext.Instance))
     throw new("Anonymous should be denied");
 
 Console.WriteLine("AOT smoke OK");
-return 0;
 
 [AuthorizationPolicy("AdminOnly")]
 sealed class AdminOnlyPolicy : IAuthorizationPolicy

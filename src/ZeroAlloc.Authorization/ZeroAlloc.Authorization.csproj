@@ -4,4 +4,7 @@
     <RootNamespace>ZeroAlloc.Authorization</RootNamespace>
     <PackageId>ZeroAlloc.Authorization</PackageId>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ZeroAlloc.Results" Version="0.1.4" />
+  </ItemGroup>
 </Project>

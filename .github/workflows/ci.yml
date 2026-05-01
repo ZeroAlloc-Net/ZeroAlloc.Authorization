@@ -116,8 +116,8 @@ jobs:
         run: dotnet tool install --global Microsoft.DotNet.ApiCompat.Tool
       - name: Build current
         run: dotnet build src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj -c Release
-      - name: Pack current
-        run: dotnet pack src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj -c Release --no-build --output ./current
+      - name: Pack current (sentinel version >= any baseline so CP0003 never fires)
+        run: dotnet pack src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj -c Release --no-build --output ./current -p:Version=9999.0.0-apicompat
       - name: Compare against latest published 1.x
         run: |
           latest=$(curl -s https://api.nuget.org/v3-flatcontainer/zeroalloc.authorization/index.json \

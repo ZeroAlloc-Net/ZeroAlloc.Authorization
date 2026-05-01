@@ -124,7 +124,9 @@ jobs:
             echo "No published 1.x yet — first 1.0 release. Skipping baseline check."
             exit 0
           fi
-          nuget install ZeroAlloc.Authorization -Version "$latest" -OutputDirectory ./baseline
+          mkdir -p ./baseline
+          curl -sL "https://api.nuget.org/v3-flatcontainer/zeroalloc.authorization/$latest/zeroalloc.authorization.$latest.nupkg" -o ./baseline/zeroalloc.authorization.$latest.nupkg
+          unzip -o ./baseline/zeroalloc.authorization.$latest.nupkg -d ./baseline/extracted > /dev/null
           apicompat package \
-            --left ./baseline/ZeroAlloc.Authorization.$latest/lib/net10.0/ZeroAlloc.Authorization.dll \
+            --left ./baseline/extracted/lib/net10.0/ZeroAlloc.Authorization.dll \
             --right src/ZeroAlloc.Authorization/bin/Release/net10.0/ZeroAlloc.Authorization.dll

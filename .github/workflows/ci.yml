@@ -116,6 +116,8 @@ jobs:
         run: dotnet tool install --global Microsoft.DotNet.ApiCompat.Tool
       - name: Build current
         run: dotnet build src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj -c Release
+      - name: Pack current
+        run: dotnet pack src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj -c Release --no-build --output ./current
       - name: Compare against latest published 1.x
         run: |
           latest=$(curl -s https://api.nuget.org/v3-flatcontainer/zeroalloc.authorization/index.json \
@@ -125,8 +127,6 @@ jobs:
             exit 0
           fi
           mkdir -p ./baseline
-          curl -sL "https://api.nuget.org/v3-flatcontainer/zeroalloc.authorization/$latest/zeroalloc.authorization.$latest.nupkg" -o ./baseline/zeroalloc.authorization.$latest.nupkg
-          unzip -o ./baseline/zeroalloc.authorization.$latest.nupkg -d ./baseline/extracted > /dev/null
-          apicompat package \
-            --left ./baseline/extracted/lib/net10.0/ZeroAlloc.Authorization.dll \
-            --right src/ZeroAlloc.Authorization/bin/Release/net10.0/ZeroAlloc.Authorization.dll
+          curl -sL "https://api.nuget.org/v3-flatcontainer/zeroalloc.authorization/$latest/zeroalloc.authorization.$latest.nupkg" \
+               -o ./baseline/baseline.nupkg
+          apicompat package ./current/*.nupkg --baseline-package ./baseline/baseline.nupkg

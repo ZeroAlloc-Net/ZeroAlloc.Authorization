@@ -3,6 +3,7 @@
 [![NuGet](https://img.shields.io/nuget/v/ZeroAlloc.Authorization.svg)](https://www.nuget.org/packages/ZeroAlloc.Authorization)
 [![Build](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/actions/workflows/ci.yml/badge.svg)](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![AOT](https://img.shields.io/badge/AOT--Compatible-passing-brightgreen)](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/MarcelRoozekrans?style=flat&logo=githubsponsors&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/MarcelRoozekrans)
 
 Authorization primitives for .NET. Five types — `ISecurityContext`, `IAuthorizationPolicy`, `[Authorize]`, `[AuthorizationPolicy]`, `AnonymousSecurityContext` — designed to be shared across hosts that need a unified policy contract.
@@ -86,6 +87,24 @@ public sealed class TenantPolicy(ITenantService tenants) : IAuthorizationPolicy
 ```
 
 The host is responsible for calling the async overload.
+
+## Performance
+
+BenchmarkDotNet (BDN ShortRun, .NET 10 release build, x64) — happy path on a simple role-check policy. The full release-time benchmark uses BDN's default job for tight confidence intervals; the indicative numbers below are from a development-time short run.
+
+| Method | Mean | Allocated |
+|---|---:|---:|
+| `IsAuthorized` | ~9 ns | 0 B |
+| `IsAuthorizedAsync` | ~31 ns | 0 B |
+| `Evaluate` | ~7 ns | 0 B |
+| `EvaluateAsync` | ~99 ns | 0 B |
+
+Source: [`benchmarks/ZeroAlloc.Authorization.Benchmarks/PolicyEvaluationBenchmarks.cs`](benchmarks/ZeroAlloc.Authorization.Benchmarks/PolicyEvaluationBenchmarks.cs).
+
+The contract is enforced as zero-allocation by:
+1. `<IsAotCompatible>true</IsAotCompatible>` on the main library (build-time IL2026/IL3050 analyzers fire on any reflection regression).
+2. The `samples/ZeroAlloc.Authorization.AotSmoke/` console app, exercised on each CI run with `PublishAot=true`.
+3. The benchmark project above.
 
 ## License
 

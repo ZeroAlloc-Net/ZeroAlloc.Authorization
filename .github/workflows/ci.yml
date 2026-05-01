@@ -75,3 +75,56 @@ jobs:
         with:
           name: nuget-package
           path: ./artifacts/*.nupkg
+
+  aot-smoke:
+    runs-on: ubuntu-latest
+    # Publishes samples/ZeroAlloc.Authorization.AotSmoke with PublishAot=true.
+    # Exercises the authorization pipeline end-to-end — the generator emits the
+    # policy composition as a proxy so any reflection regression shows as an
+    # IL2026/IL3050 error during ILC.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install AOT native toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Restore
+        run: dotnet restore samples/ZeroAlloc.Authorization.AotSmoke/ZeroAlloc.Authorization.AotSmoke.csproj
+
+      - name: Publish AOT
+        run: dotnet publish samples/ZeroAlloc.Authorization.AotSmoke/ZeroAlloc.Authorization.AotSmoke.csproj -r linux-x64 -c Release -o ./aot-out
+
+      - name: Run AOT binary
+        run: ./aot-out/ZeroAlloc.Authorization.AotSmoke
+
+  api-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install ApiCompat tool
+        run: dotnet tool install --global Microsoft.DotNet.ApiCompat.Tool
+      - name: Build current
+        run: dotnet build src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj -c Release
+      - name: Compare against latest published 1.x
+        run: |
+          latest=$(curl -s https://api.nuget.org/v3-flatcontainer/zeroalloc.authorization/index.json \
+                   | jq -r '.versions[]' | grep -E '^1\.' | tail -1)
+          if [ -z "$latest" ]; then
+            echo "No published 1.x yet — first 1.0 release. Skipping baseline check."
+            exit 0
+          fi
+          nuget install ZeroAlloc.Authorization -Version "$latest" -OutputDirectory ./baseline
+          apicompat package \
+            --left ./baseline/ZeroAlloc.Authorization.$latest/lib/net10.0/ZeroAlloc.Authorization.dll \
+            --right src/ZeroAlloc.Authorization/bin/Release/net10.0/ZeroAlloc.Authorization.dll

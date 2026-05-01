@@ -1,3 +1,5 @@
+using ZeroAlloc.Results;
+
 namespace ZeroAlloc.Authorization;
 
 /// <summary>Pluggable authorization rule. Implementations override <see cref="IsAuthorized"/>
@@ -21,5 +23,26 @@ public interface IAuthorizationPolicy
         ArgumentNullException.ThrowIfNull(ctx);
         ct.ThrowIfCancellationRequested();
         return ValueTask.FromResult(IsAuthorized(ctx));
+    }
+
+    /// <summary>Structured-result sync evaluation. Default wraps <see cref="IsAuthorized"/>.
+    /// Override to return a richer deny code/reason.</summary>
+    UnitResult<AuthorizationFailure> Evaluate(ISecurityContext ctx)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        return IsAuthorized(ctx)
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode);
+    }
+
+    /// <summary>Structured-result async evaluation. Default wraps <see cref="IsAuthorizedAsync"/>.</summary>
+    async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        ct.ThrowIfCancellationRequested();
+        return await IsAuthorizedAsync(ctx, ct).ConfigureAwait(false)
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode);
     }
 }

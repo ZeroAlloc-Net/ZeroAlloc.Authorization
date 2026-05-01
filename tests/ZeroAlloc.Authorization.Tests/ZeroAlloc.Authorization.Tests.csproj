@@ -3,7 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>ZeroAlloc.Authorization.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
-    <NoWarn>$(NoWarn);MA0074;NU1608;NU1701</NoWarn>
+    <NoWarn>$(NoWarn);MA0074;NU1608;NU1701;MA0002;MA0004;MA0047;MA0048</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />

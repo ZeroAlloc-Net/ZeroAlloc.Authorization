@@ -9,6 +9,7 @@
     <IsPackable>false</IsPackable>
     <OptimizationPreference>Size</OptimizationPreference>
     <RootNamespace>ZeroAlloc.Authorization.AotSmoke</RootNamespace>
+    <NoWarn>$(NoWarn);MA0002;MA0004;MA0047;MA0048</NoWarn>
 
     <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2067;IL2075;IL2091;IL3050;IL3051</WarningsAsErrors>
   </PropertyGroup>

@@ -37,4 +37,12 @@ public class AuthorizationFailureTests
     {
         Assert.Equal("policy.deny", AuthorizationFailure.DefaultDenyCode);
     }
+
+    [Fact]
+    public void Default_Code_FallsBackToDefaultDenyCode()
+    {
+        var f = default(AuthorizationFailure);
+        Assert.Equal(AuthorizationFailure.DefaultDenyCode, f.Code);
+        Assert.Null(f.Reason);
+    }
 }

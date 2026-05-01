@@ -10,9 +10,11 @@ public readonly struct AuthorizationFailure
     /// explanation" vs an explicitly-coded deny.</summary>
     public const string DefaultDenyCode = "policy.deny";
 
+    private readonly string? _code;
+
     /// <summary>Machine-readable code, e.g. "policy.deny.role" or "tenant.inactive".
     /// Non-null, non-empty.</summary>
-    public string Code { get; }
+    public string Code => _code ?? DefaultDenyCode;
 
     /// <summary>Optional human-readable reason. Hosts may surface this in API responses
     /// or logs; treat as untrusted-for-display unless the policy author guarantees it.</summary>
@@ -21,7 +23,7 @@ public readonly struct AuthorizationFailure
     public AuthorizationFailure(string code, string? reason = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(code);
-        Code = code;
+        _code = code;
         Reason = reason;
     }
 }

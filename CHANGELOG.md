@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.1.0...v1.1.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* **release-please:** drop pre-major flags + rename changelog-types→changelog-sections ([#7](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/7)) ([dce002f](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/dce002f5a6c6d4b7756e619c5b45428513327f68))
+
 ## [1.1.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.0.0...v1.1.0) (2026-05-01)
 
 

@@ -24,6 +24,8 @@ public Task ViewBillingAsync();
 
 **Graduation signal:** at least one host (likely Mediator) needs to express AND/OR before v1.0 of that host.
 
+**Host coupling notes:** **Generator update required** in `ZeroAlloc.Mediator.Authorization`. The host's generator must read `Mode = AuthorizeMode.Any` and emit OR-evaluation instead of the current sequential AND. Without the host update, the generator silently emits AND code for OR-mode attributes — semantic regression. Currently mitigated in the host by `ZAMA005` ("future contract attribute property detected"), which fires for any named arg on `[Authorize]` and tells the user to upgrade. AI.Sentinel handles policy composition entirely in user code today; not affected.
+
 ## 2. Parameterized policies
 
 **What:** policy names accept compile-time arguments that the policy class consumes.
@@ -48,6 +50,8 @@ public sealed class MinAgePolicy : IAuthorizationPolicy<int>
 - How does the registry handle parameterless and parameterized variants of the same policy name?
 
 **Graduation signal:** a host has shipped at least three near-duplicate policies that differ only by a constant.
+
+**Host coupling notes:** **Generator update required** in `ZeroAlloc.Mediator.Authorization`. The host's generator must forward the constructor args from `[Authorize("MinAge", 18)]` to the policy resolver (currently it only reads the policy-name positional arg). Without the host update, args silently ignored. Same `ZAMA005` mitigation as item #1.
 
 ## 3. Resource-based authorization
 
@@ -74,6 +78,8 @@ public sealed class OwnerOnlyPolicy : IAuthorizationPolicy
 - Does the host populate Resource by convention (e.g. mediator request = resource)?
 
 **Graduation signal:** at least two hosts want to share a policy that operates on a typed resource.
+
+**Host coupling notes:** **Runtime + DI surface change required** in `ZeroAlloc.Mediator.Authorization`. Host must populate the typed-resource context with the request being dispatched — neither `WithAuthorization()` nor the generator currently know about request-as-resource. New runtime API needed (e.g. `opts.UseResourceBoundContext()`); generator must emit per-request resource binding. Likely a v4.x → v4.y minor for the host. AI.Sentinel would similarly need to populate the resource (the tool call) — neither host adopts trivially.
 
 ## 4. Standard failure shape
 
@@ -104,6 +110,8 @@ public interface IAuthorizationPolicy
 
 **Risk:** highest-impact change — touches every existing policy implementation. Defer until the migration cost is justified.
 
+**Host coupling notes:** **Runtime + DI surface change required** in every host. `ZeroAlloc.Mediator.Authorization` exposes `AuthorizationDeniedException` (carrying `AuthorizationFailure`) and `Result<T, AuthorizationFailure>` directly to user code; if the contract's failure shape changes shape (new fields, signature changes), both surfaces shift. Major version bump of the host. AI.Sentinel exposes a similar deny payload through its tool-call result envelope. Both hosts must coordinate on the same major-version cadence.
+
 ## 5. Source-generated policy registry
 
 **What:** a Roslyn generator that discovers all `[AuthorizationPolicy]` types at compile time and emits:
@@ -121,6 +129,15 @@ public interface IAuthorizationPolicy
 **Graduation signal:** the second host (Mediator.Authorization) is being built and the author finds themselves writing scan-and-register code.
 
 **Risk:** medium — generator is a new build artifact, must be Native AOT-safe and run cleanly across SDK versions.
+
+**Host coupling notes:** **This item's graduation signal has fired.** `ZeroAlloc.Mediator.Authorization` shipped (PR ZeroAlloc-Net/ZeroAlloc.Mediator#74) with its own host-side `GeneratedAuthorizationLookup` generator — exactly the scan-and-register code the graduation signal anticipated. When this contract-side generator ships, the host's `src/ZeroAlloc.Mediator.Authorization.Generator/` (~80 LOC of `LookupEmitter` + `PolicyDiscovery` + `RequestDiscovery`) gets deleted; the runtime `AuthorizationBehavior` migrates to consume `AuthorizerFor<TRequest>` via DI generic dispatch (matching `Mediator.Validation`'s pattern exactly). AI.Sentinel will adopt similarly — its current scan-and-register code becomes redundant.
+
+Concrete migration path for the host once #5 ships:
+1. Delete `src/ZeroAlloc.Mediator.Authorization.Generator/` entirely.
+2. Replace `MediatorAuthorizationGeneratedHooks.GetPoliciesForRequestType<T>()` with `sp.GetService<AuthorizerFor<T>>()`.
+3. Replace `Resolve(name, sp)` with the same accessor pattern.
+4. Drop the `[ModuleInitializer]` wiring — DI generic dispatch handles everything.
+Net code reduction in the host: ~150 LOC (generator + hooks + tests for both).
 
 ## 6. Certify the "ZeroAlloc" promise
 

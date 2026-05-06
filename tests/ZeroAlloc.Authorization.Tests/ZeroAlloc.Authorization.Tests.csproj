@@ -16,4 +16,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ZeroAlloc.Authorization\ZeroAlloc.Authorization.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\samples\ZeroAlloc.Authorization.AotSmoke\Internal\AllocationGate.cs"
+             Link="Internal\AllocationGate.cs" />
+  </ItemGroup>
 </Project>

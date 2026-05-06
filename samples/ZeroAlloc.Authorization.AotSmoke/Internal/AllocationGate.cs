@@ -21,11 +21,12 @@ internal static class AllocationGate
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         var perCall = allocated / iterations;
-        if (perCall > budgetBytes)
+        var totalBudget = (long)budgetBytes * iterations;
+        if (allocated > totalBudget)
         {
             throw new InvalidOperationException(
-                $"AllocationGate: {label} allocated {perCall} B/call over {iterations} iterations " +
-                $"(total {allocated} B), budget is {budgetBytes} B/call. " +
+                $"AllocationGate: {label} allocated {allocated} B total over {iterations} iterations " +
+                $"(~{perCall} B/call avg), budget is {budgetBytes} B/call ({totalBudget} B total). " +
                 "Use BenchmarkDotNet [MemoryDiagnoser] locally to find the culprit.");
         }
     }
@@ -60,11 +61,12 @@ internal static class AllocationGate
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         var perCall = allocated / iterations;
-        if (perCall > budgetBytes)
+        var totalBudget = (long)budgetBytes * iterations;
+        if (allocated > totalBudget)
         {
             throw new InvalidOperationException(
-                $"AllocationGate: {label} allocated {perCall} B/call over {iterations} iterations " +
-                $"(total {allocated} B), budget is {budgetBytes} B/call. " +
+                $"AllocationGate: {label} allocated {allocated} B total over {iterations} iterations " +
+                $"(~{perCall} B/call avg), budget is {budgetBytes} B/call ({totalBudget} B total). " +
                 "Use BenchmarkDotNet [MemoryDiagnoser] locally to find the culprit.");
         }
     }

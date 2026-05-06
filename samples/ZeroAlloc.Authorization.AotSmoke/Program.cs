@@ -15,7 +15,7 @@ if (!(await ((IAuthorizationPolicy)policy).EvaluateAsync(ctx)).IsSuccess) throw 
 if (policy.IsAuthorized(AnonymousSecurityContext.Instance))
     throw new("Anonymous should be denied");
 
-Console.WriteLine("AOT smoke OK");
+Console.WriteLine("AOT behavior OK");
 
 // Allocation budget gate — run AFTER behavior assertions so behavior failures are reported first.
 // Asserts the README's "Zero allocation on all four hot-path methods" claim under the

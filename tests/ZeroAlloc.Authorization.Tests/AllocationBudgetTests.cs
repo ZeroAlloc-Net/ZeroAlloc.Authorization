@@ -22,12 +22,18 @@ public class AllocationBudgetTests
     [Fact]
     public void Gate_RejectsValueTask_NotCompletedSynchronously()
     {
+        // A TaskCompletionSource whose Task is never completed — guarantees the
+        // ValueTask returns IsCompletedSuccessfully = false on every invocation,
+        // regardless of platform/threadpool race conditions. (An async lambda
+        // with `await Task.Yield()` raced under Linux CI: the continuation could
+        // run before Drain checked IsCompletedSuccessfully.)
+        var pending = new TaskCompletionSource<int>();
         var ex = Assert.Throws<InvalidOperationException>(() =>
             AllocationGate.AssertBudgetValueTask<int>(
                 budgetBytes: 0,
                 iterations: 1,
-                action: async () => { await Task.Yield(); return 1; },
-                label: "yielding"));
+                action: () => new ValueTask<int>(pending.Task),
+                label: "pending"));
 
         Assert.Contains("sync-completion-required", ex.Message);
     }

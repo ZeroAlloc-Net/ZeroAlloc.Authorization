@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.1.1...v1.2.0) (2026-05-06)
+
+
+### Features
+
+* **certify:** AOT-enforced allocation gate for happy-path APIs ([#11](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/11)) ([3cfad38](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/3cfad383a4c1c230ecd5beebcd96679987078991))
+
 ## [1.1.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.1.0...v1.1.1) (2026-05-03)
 
 

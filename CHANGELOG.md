@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.2.0...v1.2.1) (2026-05-07)
+
+
+### Documentation
+
+* **backlog:** add host-coupling notes for items affecting Mediator.Authorization ([#13](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/13)) ([cddf38c](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/cddf38cef1f4d3be19187fb3f60309b75bf020ed))
+* **backlog:** mark item [#6](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/6) (Certify the ZeroAlloc promise) as DONE ([#16](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/16)) ([3fd239e](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/3fd239e7f7c11897feca52173c3d4ec5f262137f))
+
 ## [1.2.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.1.1...v1.2.0) (2026-05-06)
 
 

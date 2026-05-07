@@ -139,27 +139,26 @@ Concrete migration path for the host once #5 ships:
 4. Drop the `[ModuleInitializer]` wiring — DI generic dispatch handles everything.
 Net code reduction in the host: ~150 LOC (generator + hooks + tests for both).
 
-## 6. Certify the "ZeroAlloc" promise
+## 6. Certify the "ZeroAlloc" promise — ✅ DONE (2026-05-06, PR #11)
 
-**What:** make good on what the package name implies. The current contract is AOT-safe and allocation-free *by design*, but nothing proves it. Other libraries in this org (Cache, Resilience, StateMachine, etc.) carry an AOT badge backed by an `aot-smoke` CI job and BenchmarkDotNet zero-allocation assertions; this package carries neither.
+**Status:** shipped. The package now carries the AOT badge backed by enforcement, not just aspiration.
 
-Concrete bullets:
+**What landed:**
 
-- Add `<IsAotCompatible>true</IsAotCompatible>` to the main library csproj.
-- Add an `aot-smoke` CI job that publishes a sample app with `PublishAot=true` and asserts `IsAuthorized` / `IsAuthorizedAsync` execute end-to-end on the AOT-published binary.
-- Add a `benchmarks/` project with BenchmarkDotNet runs over `IsAuthorized` and the `IsAuthorizedAsync` happy path. Assert `Allocated == 0 B` for both.
-- Add the AOT badge to the README, matching the pattern used by other ZeroAlloc libraries.
-- Optionally: add `[RequiresDynamicCode]` / `[RequiresUnreferencedCode]` annotations on any future API that does need them, so consumers get warnings.
+- `<IsAotCompatible>true</IsAotCompatible>` on the main library csproj — already in place from earlier work.
+- `aot-smoke` CI job publishes the sample with `PublishAot=true` and exercises all four hot-path APIs end-to-end on the AOT-compiled binary.
+- `benchmarks/` project with BenchmarkDotNet runs covering `IsAuthorized`, `IsAuthorizedAsync`, `Evaluate`, `EvaluateAsync` — already in place from earlier work.
+- AOT badge in the README — already in place from earlier work.
+- **The missing piece (the core of this item):** a CI-enforceable allocation gate. A 70-LOC `AllocationGate` helper brackets calls with `GC.GetAllocatedBytesForCurrentThread()` and asserts a per-call budget. Used in two places:
+  - `tests/AllocationBudgetTests.cs` — JIT-side gate, runs every `dotnet test`. Fails CI if any of the 4 hot-path APIs regresses to allocate.
+  - `samples/AotSmoke/Program.cs` — AOT-side gate. Catches trim/escape-analysis regressions the JIT-side test misses. Confirmed `EvaluateAsync (allow)` is genuinely 0 B under AOT runtime.
+- Three negative-control self-tests guard the gate itself: `Gate_DetectsAllocation_WhenActionAllocates`, `Gate_RejectsValueTask_NotCompletedSynchronously`, `Gate_TolerantOfWarmupOnlyAllocations`.
 
-**Why:** without certification, the name is aspirational rather than measured. A consumer evaluating this package against `Microsoft.AspNetCore.Authorization` cannot today distinguish "actually zero-alloc and AOT-tested" from "happens to have no obvious allocations on visual inspection."
+**Open questions resolved:**
+- Benchmark target: leaf `IsAuthorized` calls only — keeps the gate tight; host-style measurement lives in the host packages where it belongs (e.g. `Mediator.Authorization`'s own gate).
+- Allocation budget: strict 0 B for all four hot-path APIs. Confirmed achievable on both JIT and AOT runtimes.
 
-**Open questions:**
-- Benchmark target: should the harness include a host-style policy-resolve-then-evaluate path, or only the leaf `IsAuthorized` call? The former is more representative of real usage but requires a stub host.
-- Allocation budget: strict 0 B or a small budget for `ValueTask` boxing on certain async paths?
-
-**Graduation signal:** before any second host (Mediator.Authorization) is announced. Hosts will tout AOT compatibility — the contract package needs to back that up.
-
-**Risk:** low — mechanical work, no design decisions. Mostly copy-paste from sibling libraries that already have these gates.
+**Pioneer pattern.** This is the first CI-enforceable allocation gate in the ZeroAlloc family. Sibling packages (Mediator, Cache, Resilience, etc.) can adopt by copying ~70 LOC + declaring their own per-API budget tables. `ZeroAlloc.Mediator.Authorization` shipped today with the same gate (Mediator PR #74), confirming the pattern lifts cleanly.
 
 ---
 

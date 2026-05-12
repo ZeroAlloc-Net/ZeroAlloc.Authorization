@@ -99,7 +99,7 @@ BenchmarkDotNet (BDN ShortRun, .NET 10 release build, x64) — happy path on a s
 | `Evaluate` | ~7 ns | 0 B |
 | `EvaluateAsync` | ~99 ns | 0 B |
 
-Source: [`benchmarks/ZeroAlloc.Authorization.Benchmarks/PolicyEvaluationBenchmarks.cs`](benchmarks/ZeroAlloc.Authorization.Benchmarks/PolicyEvaluationBenchmarks.cs).
+Source: [`benchmarks/ZeroAlloc.Authorization.Benchmarks/PolicyEvaluationBenchmarks.cs`](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/benchmarks/ZeroAlloc.Authorization.Benchmarks/PolicyEvaluationBenchmarks.cs).
 
 The contract is enforced as zero-allocation by:
 1. `<IsAotCompatible>true</IsAotCompatible>` on the main library (build-time IL2026/IL3050 analyzers fire on any reflection regression).

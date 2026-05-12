@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.2.1...v1.2.2) (2026-05-12)
+
+
+### Bug Fixes
+
+* **readme:** absolute GitHub URLs so nuget.org links resolve ([#17](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/17)) ([9dfcab4](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/9dfcab43c0c1d8afe9cd052d7898912d81ab416e))
+
 ## [1.2.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.2.0...v1.2.1) (2026-05-07)
 
 

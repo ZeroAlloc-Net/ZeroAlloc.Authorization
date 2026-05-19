@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- snapshot test files: skip MA0048 (file name must match type), MA0051 (method length),
          MA0047 (multiple types per file), MA0002 (string comparer), MA0004 (ConfigureAwait). -->
-    <NoWarn>$(NoWarn);MA0048;MA0051;MA0047;MA0002;MA0004</NoWarn>
+    <NoWarn>$(NoWarn);MA0048;MA0051;MA0047;MA0002;MA0004;MA0006</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />

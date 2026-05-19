@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using ZeroAlloc.Authorization.Generator.Diagnostics;
 using ZeroAlloc.Authorization.Generator.Discovery;
 using ZeroAlloc.Authorization.Generator.Emit;
 
@@ -22,11 +23,24 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         if (policies.Count == 0 && requires.Count == 0) return;
 
         // Build a name→info dictionary for the emitter.
-        // ZAUTH002 (duplicates) will diagnose separately in Task 10 — for now, last-write-wins.
         var byName = new Dictionary<string, PolicyInfo>(System.StringComparer.Ordinal);
         for (int i = 0; i < policies.Count; i++)
         {
             byName[policies[i].Name] = policies[i];
+        }
+
+        // ZAUTH001: every [RequirePolicy] name must resolve to a known [Policy].
+        for (int i = 0; i < requires.Count; i++)
+        {
+            var req = requires[i];
+            for (int j = 0; j < req.PolicyNames.Count; j++)
+            {
+                var name = req.PolicyNames[j];
+                if (!byName.ContainsKey(name))
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(Descriptors.UnknownPolicyName, Location.None, name));
+                }
+            }
         }
 
         var authorizers = AuthorizerForEmitter.Emit(requires, byName);

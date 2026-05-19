@@ -13,7 +13,7 @@ namespace ZeroAlloc.Authorization.Generated
             global::ZeroAlloc.Authorization.ISecurityContext ctx,
             global::System.Threading.CancellationToken ct = default)
         {
-            var __p_admin = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::MyApp.AdminPolicy>(_sp);
+            global::ZeroAlloc.Authorization.IAuthorizationPolicy __p_admin = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::MyApp.AdminPolicy>(_sp);
             var __r_admin = await __p_admin.EvaluateAsync(ctx, ct).ConfigureAwait(false);
             if (__r_admin.IsFailure) return __r_admin;
             return global::ZeroAlloc.Results.UnitResult<global::ZeroAlloc.Authorization.AuthorizationFailure>.Success();

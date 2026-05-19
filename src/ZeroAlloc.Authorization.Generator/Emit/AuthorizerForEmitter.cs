@@ -43,7 +43,9 @@ internal static class AuthorizerForEmitter
             var name = req.PolicyNames[i];
             if (!policiesByName.TryGetValue(name, out var policy)) continue; // ZAUTH001 will diagnose
             var local = Sanitize(name);
-            sb.AppendLine($"            var __p_{local} = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{policy.FullyQualifiedTypeName}>(_sp);");
+            // Type as IAuthorizationPolicy so default-interface-method EvaluateAsync is visible —
+            // concrete policy classes only declare `bool IsAuthorized`; everything else is a DIM.
+            sb.AppendLine($"            global::ZeroAlloc.Authorization.IAuthorizationPolicy __p_{local} = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{policy.FullyQualifiedTypeName}>(_sp);");
             sb.AppendLine($"            var __r_{local} = await __p_{local}.EvaluateAsync(ctx, ct).ConfigureAwait(false);");
             sb.AppendLine($"            if (__r_{local}.IsFailure) return __r_{local};");
         }

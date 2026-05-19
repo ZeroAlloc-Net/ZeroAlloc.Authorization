@@ -1,5 +1,6 @@
 using ZeroAlloc.Authorization;
 using ZeroAlloc.Authorization.AotSmoke.Internal;
+using ZeroAlloc.Results;
 
 namespace ZeroAlloc.Authorization.Tests;
 
@@ -53,39 +54,6 @@ public class AllocationBudgetTests
     }
 
     [Fact]
-    public void IsAuthorized_AllowPath_ZeroAllocation()
-    {
-        IAuthorizationPolicy policy = new AdminOnlyPolicy();
-        var ctx = NewAdminContext();
-        AllocationGate.AssertBudget(0, 1000, () => _ = policy.IsAuthorized(ctx), "IsAuthorized (allow)");
-    }
-
-    [Fact]
-    public void IsAuthorized_DenyAnonymous_ZeroAllocation()
-    {
-        IAuthorizationPolicy policy = new AdminOnlyPolicy();
-        AllocationGate.AssertBudget(0, 1000,
-            () => _ = policy.IsAuthorized(AnonymousSecurityContext.Instance),
-            "IsAuthorized (deny anonymous)");
-    }
-
-    [Fact]
-    public void Evaluate_AllowPath_ZeroAllocation()
-    {
-        IAuthorizationPolicy policy = new AdminOnlyPolicy();
-        var ctx = NewAdminContext();
-        AllocationGate.AssertBudget(0, 1000, () => _ = policy.Evaluate(ctx), "Evaluate (allow)");
-    }
-
-    [Fact]
-    public void IsAuthorizedAsync_AllowPath_ZeroAllocation()
-    {
-        IAuthorizationPolicy policy = new AdminOnlyPolicy();
-        var ctx = NewAdminContext();
-        AllocationGate.AssertBudgetValueTask(0, 1000, () => policy.IsAuthorizedAsync(ctx), "IsAuthorizedAsync (allow)");
-    }
-
-    [Fact]
     public void EvaluateAsync_AllowPath_ZeroAllocation()
     {
         IAuthorizationPolicy policy = new AdminOnlyPolicy();
@@ -93,12 +61,25 @@ public class AllocationBudgetTests
         AllocationGate.AssertBudgetValueTask(0, 1000, () => policy.EvaluateAsync(ctx), "EvaluateAsync (allow)");
     }
 
+    [Fact]
+    public void EvaluateAsync_DenyAnonymous_ZeroAllocation()
+    {
+        IAuthorizationPolicy policy = new AdminOnlyPolicy();
+        AllocationGate.AssertBudgetValueTask(0, 1000,
+            () => policy.EvaluateAsync(AnonymousSecurityContext.Instance),
+            "EvaluateAsync (deny anonymous)");
+    }
+
     private static TestContext NewAdminContext()
         => new("alice", new HashSet<string> { "Admin" }, new Dictionary<string, string>());
 
     private sealed class AdminOnlyPolicy : IAuthorizationPolicy
     {
-        public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
+        public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+            ISecurityContext ctx, CancellationToken ct = default)
+            => new(ctx.Roles.Contains("Admin")
+                ? UnitResult<AuthorizationFailure>.Success()
+                : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode));
     }
 
     private sealed record TestContext(string Id,

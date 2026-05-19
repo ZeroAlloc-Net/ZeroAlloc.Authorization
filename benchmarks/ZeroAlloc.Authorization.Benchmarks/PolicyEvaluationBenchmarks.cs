@@ -13,22 +13,16 @@ public class PolicyEvaluationBenchmarks
         new Dictionary<string, string>());
 
     [Benchmark]
-    public bool IsAuthorized() => _policy.IsAuthorized(_ctx);
-
-    [Benchmark]
-    public async ValueTask<bool> IsAuthorizedAsync()
-        => await _policy.IsAuthorizedAsync(_ctx);
-
-    [Benchmark]
-    public UnitResult<AuthorizationFailure> Evaluate() => _policy.Evaluate(_ctx);
-
-    [Benchmark]
     public async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync()
         => await _policy.EvaluateAsync(_ctx);
 
     private sealed class AdminOnlyPolicy : IAuthorizationPolicy
     {
-        public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
+        public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+            ISecurityContext ctx, CancellationToken ct = default)
+            => new(ctx.Roles.Contains("Admin")
+                ? UnitResult<AuthorizationFailure>.Success()
+                : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode));
     }
 
     private sealed record TestContext(string Id,

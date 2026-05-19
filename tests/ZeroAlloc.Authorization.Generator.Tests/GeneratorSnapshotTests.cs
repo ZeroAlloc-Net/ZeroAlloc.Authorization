@@ -18,7 +18,9 @@ namespace MyApp;
 [Policy(""admin"")]
 public sealed class AdminPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+        => new(UnitResult<AuthorizationFailure>.Success());
 }
 
 [RequirePolicy(""admin"")]
@@ -37,13 +39,18 @@ public sealed record DeleteUser(int Id);
         // Build a "SharedKernel" assembly that defines the policy
         const string libASource = @"
 using ZeroAlloc.Authorization;
+using ZeroAlloc.Results;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SharedKernel;
 
 [Policy(""admin"")]
 public sealed class AdminPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+        => new(UnitResult<AuthorizationFailure>.Success());
 }
 ";
         var standardRefs = GetStandardReferences();

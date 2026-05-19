@@ -30,13 +30,17 @@ namespace MyApp;
 [Policy(""admin"")]
 public sealed class AdminPolicyA : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
 }
 
 [Policy(""admin"")]
 public sealed class AdminPolicyB : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
 }
 ";
         var diagnostics = RunGenerator(source);
@@ -53,7 +57,9 @@ namespace MyApp;
 [Policy(""admin"")]
 public sealed class AdminPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
 }
 ";
         var diagnostics = RunGenerator(source);
@@ -70,7 +76,9 @@ namespace MyApp;
 [Policy(""admin"")]
 public abstract class AdminPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
 }
 ";
         var diagnostics = RunGenerator(source);
@@ -89,7 +97,9 @@ namespace MyApp;
 [Policy(""admin"")]
 public sealed class AdminPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
 }
 
 [RequirePolicy(""admin"")]
@@ -112,7 +122,9 @@ namespace MyApp;
 [Policy(""admin"")]
 public sealed class AdminPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
 }
 ";
         var diagnostics = RunGenerator(source);
@@ -129,7 +141,9 @@ namespace MyApp;
 [Policy(""admin"")]
 public sealed class AdminPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
 }
 ";
         var diagnostics = RunGenerator(source);
@@ -146,13 +160,17 @@ namespace MyApp;
 [Policy(""admin"")]
 public sealed class AdminPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
 }
 
 [Policy(""user"")]
 public sealed class UserPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
 }
 ";
         var diagnostics = RunGenerator(source);
@@ -169,7 +187,9 @@ namespace MyApp;
 [Policy(""admin"")]
 public sealed class AdminPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => true;
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
 }
 
 [RequirePolicy(""admin"")]

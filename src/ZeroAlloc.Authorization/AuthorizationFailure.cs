@@ -1,6 +1,6 @@
 namespace ZeroAlloc.Authorization;
 
-/// <summary>Structured deny information returned from <see cref="IAuthorizationPolicy.Evaluate"/>.
+/// <summary>Structured deny information returned from <see cref="IAuthorizationPolicy.EvaluateAsync"/>.
 /// Hosts surface <see cref="Code"/> for machine-readable matching and <see cref="Reason"/> for
 /// optional human-readable text.</summary>
 public readonly struct AuthorizationFailure

@@ -1,48 +1,17 @@
+using System.Threading;
+using System.Threading.Tasks;
 using ZeroAlloc.Results;
 
 namespace ZeroAlloc.Authorization;
 
-/// <summary>Pluggable authorization rule. Implementations override <see cref="IsAuthorized"/>
-/// for sync checks; override <see cref="IsAuthorizedAsync"/> for I/O-bound checks (e.g. tenant
-/// lookup, claims validation against an external source). The default async implementation
-/// delegates to the sync method.</summary>
+/// <summary>
+/// An authorization policy — given a security context, evaluates whether the
+/// caller is authorized. Implementations are typically scoped DI services.
+/// Sync-completing policies return <c>new ValueTask&lt;...&gt;(syncResult)</c>
+/// — allocation-free on the stack.
+/// </summary>
 public interface IAuthorizationPolicy
 {
-    /// <summary>Returns true if the caller is allowed. Hosts may pass a richer subinterface
-    /// (e.g. <c>IToolCallSecurityContext</c>); downcast inside the policy body.
-    /// Implementations MAY throw <see cref="InvalidOperationException"/> if the policy is
-    /// fundamentally I/O-bound — hosts that cannot dispatch asynchronously should treat such
-    /// a throw as <c>Deny</c>, not as a fault.</summary>
-    bool IsAuthorized(ISecurityContext ctx);
-
-    /// <summary>I/O-bound override point. Default delegates to <see cref="IsAuthorized"/>
-    /// after honoring the supplied cancellation token. Override this method for
-    /// asynchronous lookups (tenant validation, claims resolution, etc.).</summary>
-    ValueTask<bool> IsAuthorizedAsync(ISecurityContext ctx, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(ctx);
-        ct.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(IsAuthorized(ctx));
-    }
-
-    /// <summary>Structured-result sync evaluation. Default wraps <see cref="IsAuthorized"/>.
-    /// Override to return a richer deny code/reason.</summary>
-    UnitResult<AuthorizationFailure> Evaluate(ISecurityContext ctx)
-    {
-        ArgumentNullException.ThrowIfNull(ctx);
-        return IsAuthorized(ctx)
-            ? UnitResult<AuthorizationFailure>.Success()
-            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode);
-    }
-
-    /// <summary>Structured-result async evaluation. Default wraps <see cref="IsAuthorizedAsync"/>.</summary>
-    async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
-        ISecurityContext ctx, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(ctx);
-        ct.ThrowIfCancellationRequested();
-        return await IsAuthorizedAsync(ctx, ct).ConfigureAwait(false)
-            ? UnitResult<AuthorizationFailure>.Success()
-            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode);
-    }
+    ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default);
 }

@@ -15,10 +15,6 @@ ZeroAlloc.Authorization.AuthorizeAttribute
 ZeroAlloc.Authorization.AuthorizeAttribute.AuthorizeAttribute(string! policyName) -> void
 ZeroAlloc.Authorization.AuthorizeAttribute.PolicyName.get -> string!
 ZeroAlloc.Authorization.IAuthorizationPolicy
-ZeroAlloc.Authorization.IAuthorizationPolicy.Evaluate(ZeroAlloc.Authorization.ISecurityContext! ctx) -> ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>
-ZeroAlloc.Authorization.IAuthorizationPolicy.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>
-ZeroAlloc.Authorization.IAuthorizationPolicy.IsAuthorized(ZeroAlloc.Authorization.ISecurityContext! ctx) -> bool
-ZeroAlloc.Authorization.IAuthorizationPolicy.IsAuthorizedAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 ZeroAlloc.Authorization.ISecurityContext
 ZeroAlloc.Authorization.ISecurityContext.Claims.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
 ZeroAlloc.Authorization.ISecurityContext.Id.get -> string!

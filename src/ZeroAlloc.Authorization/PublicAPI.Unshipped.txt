@@ -1,4 +1,8 @@
 #nullable enable
+*REMOVED*ZeroAlloc.Authorization.IAuthorizationPolicy.Evaluate(ZeroAlloc.Authorization.ISecurityContext! ctx) -> ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>
+*REMOVED*ZeroAlloc.Authorization.IAuthorizationPolicy.IsAuthorized(ZeroAlloc.Authorization.ISecurityContext! ctx) -> bool
+*REMOVED*ZeroAlloc.Authorization.IAuthorizationPolicy.IsAuthorizedAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+ZeroAlloc.Authorization.IAuthorizationPolicy.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>
 ZeroAlloc.Authorization.PolicyAttribute
 ZeroAlloc.Authorization.PolicyAttribute.PolicyAttribute(string! name) -> void
 ZeroAlloc.Authorization.PolicyAttribute.Name.get -> string!

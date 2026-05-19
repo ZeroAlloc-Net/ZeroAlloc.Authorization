@@ -9,65 +9,90 @@ public class AuthorizationPolicyEvaluateTests
         new Dictionary<string, string>());
 
     [Fact]
-    public void Evaluate_DefaultsToWrapping_IsAuthorized_True()
+    public async Task EvaluateAsync_AllowingPolicy_Succeeds()
     {
         IAuthorizationPolicy policy = new AllowingPolicy();
-        var result = policy.Evaluate(Ctx);
+        var result = await policy.EvaluateAsync(Ctx);
         Assert.True(result.IsSuccess);
     }
 
     [Fact]
-    public void Evaluate_DefaultsToWrapping_IsAuthorized_False_WithDefaultDenyCode()
+    public async Task EvaluateAsync_DenyingPolicy_FailsWithDefaultDenyCode()
     {
         IAuthorizationPolicy policy = new DenyingPolicy();
-        var result = policy.Evaluate(Ctx);
+        var result = await policy.EvaluateAsync(Ctx);
         Assert.False(result.IsSuccess);
         Assert.Equal(AuthorizationFailure.DefaultDenyCode, result.Error.Code);
         Assert.Null(result.Error.Reason);
     }
 
     [Fact]
-    public async Task EvaluateAsync_DefaultsToWrapping_IsAuthorizedAsync_True()
-    {
-        IAuthorizationPolicy policy = new AllowingPolicy();
-        var result = await policy.EvaluateAsync(Ctx);
-        Assert.True(result.IsSuccess);
-    }
-
-    [Fact]
-    public async Task EvaluateAsync_DefaultsToWrapping_IsAuthorizedAsync_False_WithDefaultDenyCode()
-    {
-        IAuthorizationPolicy policy = new DenyingPolicy();
-        var result = await policy.EvaluateAsync(Ctx);
-        Assert.False(result.IsSuccess);
-        Assert.Equal(AuthorizationFailure.DefaultDenyCode, result.Error.Code);
-    }
-
-    [Fact]
-    public void Evaluate_OverrideEmitsCustomCode()
+    public async Task EvaluateAsync_RichDenyPolicy_EmitsCustomCodeAndReason()
     {
         IAuthorizationPolicy policy = new RichDenyPolicy();
-        var result = policy.Evaluate(Ctx);
+        var result = await policy.EvaluateAsync(Ctx);
         Assert.False(result.IsSuccess);
         Assert.Equal("policy.deny.role", result.Error.Code);
         Assert.Equal("user is not Admin", result.Error.Reason);
     }
 
+    [Fact]
+    public async Task EvaluateAsync_AsyncPolicy_AwaitsAndSucceeds()
+    {
+        IAuthorizationPolicy policy = new AsyncAllowingPolicy();
+        var result = await policy.EvaluateAsync(Ctx);
+        Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_PreCancelledToken_ThrowsOperationCanceled()
+    {
+        IAuthorizationPolicy policy = new SlowPolicy();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            async () => await policy.EvaluateAsync(Ctx, cts.Token).ConfigureAwait(false));
+    }
+
     private sealed class AllowingPolicy : IAuthorizationPolicy
     {
-        public bool IsAuthorized(ISecurityContext ctx) => true;
+        public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+            ISecurityContext ctx, CancellationToken ct = default)
+            => new(UnitResult<AuthorizationFailure>.Success());
     }
 
     private sealed class DenyingPolicy : IAuthorizationPolicy
     {
-        public bool IsAuthorized(ISecurityContext ctx) => false;
+        public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+            ISecurityContext ctx, CancellationToken ct = default)
+            => new(new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode));
     }
 
     private sealed class RichDenyPolicy : IAuthorizationPolicy
     {
-        public bool IsAuthorized(ISecurityContext ctx) => false;
-        public UnitResult<AuthorizationFailure> Evaluate(ISecurityContext ctx)
-            => new AuthorizationFailure("policy.deny.role", "user is not Admin");
+        public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+            ISecurityContext ctx, CancellationToken ct = default)
+            => new(new AuthorizationFailure("policy.deny.role", "user is not Admin"));
+    }
+
+    private sealed class AsyncAllowingPolicy : IAuthorizationPolicy
+    {
+        public async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+            ISecurityContext ctx, CancellationToken ct = default)
+        {
+            await Task.Yield();
+            return UnitResult<AuthorizationFailure>.Success();
+        }
+    }
+
+    private sealed class SlowPolicy : IAuthorizationPolicy
+    {
+        public async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+            ISecurityContext ctx, CancellationToken ct = default)
+        {
+            await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+            return UnitResult<AuthorizationFailure>.Success();
+        }
     }
 
     private sealed record TestContext(string Id,

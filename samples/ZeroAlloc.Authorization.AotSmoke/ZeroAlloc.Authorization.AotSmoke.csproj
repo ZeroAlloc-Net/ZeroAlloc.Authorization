@@ -15,7 +15,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\ZeroAlloc.Authorization\ZeroAlloc.Authorization.csproj"
                       SetTargetFramework="TargetFramework=net10.0" />
+    <!-- Direct analyzer wiring so the generator runs for this sample. The
+         ZeroAlloc.Authorization project references the generator with
+         PrivateAssets="all", which intentionally hides the analyzer from
+         downstream consumers — we re-attach it here as a built DLL (NOT a
+         ProjectReference) because ProjectReference makes MSBuild evaluate the
+         generator's netstandard2.0 TargetFramework during AOT publish, which
+         fails NETSDK1207. The generator is built transitively via the
+         ZeroAlloc.Authorization ProjectReference above. -->
+    <Analyzer Include="..\..\src\ZeroAlloc.Authorization.Generator\bin\$(Configuration)\netstandard2.0\ZeroAlloc.Authorization.Generator.dll" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ZeroAlloc.Authorization.Generator.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- snapshot test files: skip MA0048 (file name must match type), MA0051 (method length),
+         MA0047 (multiple types per file), MA0002 (string comparer), MA0004 (ConfigureAwait). -->
+    <NoWarn>$(NoWarn);MA0048;MA0051;MA0047;MA0002;MA0004;MA0006</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
+    <PackageReference Include="xunit" Version="2.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
+    <!-- Verify.SourceGenerators 2.x depends on Verify 26.x; the matching Verify.Xunit is 26.x. -->
+    <PackageReference Include="Verify.Xunit" Version="26.6.0" />
+    <PackageReference Include="Verify.SourceGenerators" Version="2.5.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.3.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="VerifyXunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ZeroAlloc.Authorization\ZeroAlloc.Authorization.csproj" />
+    <ProjectReference Include="..\..\src\ZeroAlloc.Authorization.Generator\ZeroAlloc.Authorization.Generator.csproj" />
+  </ItemGroup>
+</Project>

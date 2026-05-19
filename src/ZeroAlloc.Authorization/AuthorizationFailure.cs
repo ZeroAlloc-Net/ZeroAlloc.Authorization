@@ -1,13 +1,13 @@
 namespace ZeroAlloc.Authorization;
 
-/// <summary>Structured deny information returned from <see cref="IAuthorizationPolicy.Evaluate"/>.
+/// <summary>Structured deny information returned from <see cref="IAuthorizationPolicy.EvaluateAsync"/>.
 /// Hosts surface <see cref="Code"/> for machine-readable matching and <see cref="Reason"/> for
 /// optional human-readable text.</summary>
 public readonly struct AuthorizationFailure
 {
-    /// <summary>Default deny code emitted when an <c>IsAuthorized=false</c> result is wrapped
-    /// without a more specific code. Hosts can match on this to detect "policy denied without
-    /// explanation" vs an explicitly-coded deny.</summary>
+    /// <summary>Default deny code emitted when <see cref="IAuthorizationPolicy.EvaluateAsync"/>
+    /// returns a failure without a more specific code. Hosts can match on this to detect "policy
+    /// denied without explanation" vs an explicitly-coded deny.</summary>
     public const string DefaultDenyCode = "policy.deny";
 
     private readonly string? _code;

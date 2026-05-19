@@ -2,43 +2,48 @@
 
 Candidate features that may move into the core contract once concrete consumer needs emerge. Order is rough priority, not commitment. Nothing here ships speculatively — items graduate when at least two hosts independently want the same thing.
 
-## 1. Policy composition
+## 1. Policy composition with explicit OR
 
-**What:** allow multiple policy names to compose on a single method, with explicit AND / OR semantics.
+**What:** allow stacked `[RequirePolicy]` declarations to express OR semantics in addition to the current AND default.
 
 ```csharp
-[Authorize("Admin")]
-[Authorize("Premium")]                 // implicit AND — both must pass
-public Task DeleteUserAsync(string id);
+[RequirePolicy("Admin")]
+[RequirePolicy("Premium")]   // implicit AND — both must pass (current behavior)
+public sealed record DeleteUserCommand(string Id);
 
-[Authorize("Admin", "Premium", Mode = AuthorizeMode.Any)]   // OR — either passes
-public Task ViewBillingAsync();
+// Hypothetical OR knob:
+[RequirePolicy("Admin", Mode = RequirePolicyMode.Any)]
+[RequirePolicy("Premium", Mode = RequirePolicyMode.Any)]
+public sealed record ViewBillingQuery();
 ```
 
-**Why:** policies stay small and reusable; consumers stop writing `AdminAndPremiumPolicy` aggregates. Without this, every combination needs a new `[AuthorizationPolicy]` class.
+**Why:** policies stay small and reusable; consumers stop writing `AdminAndPremiumPolicy` aggregates. Without this, every combination needs a new `[Policy]` class.
 
 **Open questions:**
-- Single attribute with `params string[]` + `Mode` enum, or stackable attributes that the host evaluates?
-- Default mode when stacking — AND or OR?
+- Single attribute with `params string[]` + `Mode` enum, or per-attribute `Mode` property that the generator evaluates?
+- Default mode when stacking — keep AND or switch to explicit?
 - Short-circuit on first failure or evaluate all (for richer failure reporting)?
 
-**Graduation signal:** at least one host (likely Mediator) needs to express AND/OR before v1.0 of that host.
+**Graduation signal:** at least one host needs OR composition that's awkward to express in the policy body.
 
-**Host coupling notes:** **Generator update required** in `ZeroAlloc.Mediator.Authorization`. The host's generator must read `Mode = AuthorizeMode.Any` and emit OR-evaluation instead of the current sequential AND. Without the host update, the generator silently emits AND code for OR-mode attributes — semantic regression. Currently mitigated in the host by `ZAMA005` ("future contract attribute property detected"), which fires for any named arg on `[Authorize]` and tells the user to upgrade. AI.Sentinel handles policy composition entirely in user code today; not affected.
+**Generator coupling notes:** the bundled generator currently emits AND-only dispatchers. Adding `Mode` requires teaching `AuthorizerForEmitter` to emit a different short-circuit pattern and bumping the generator's emit version.
 
 ## 2. Parameterized policies
 
 **What:** policy names accept compile-time arguments that the policy class consumes.
 
 ```csharp
-[Authorize("MinAge", 18)]
-public Task ApplyForLicenseAsync(...);
+[RequirePolicy("MinAge", 18)]
+public sealed record ApplyForLicenseCommand(...);
 
-[AuthorizationPolicy("MinAge")]
+[Policy("MinAge")]
 public sealed class MinAgePolicy : IAuthorizationPolicy<int>
 {
-    public bool IsAuthorized(ISecurityContext ctx, int minAge) =>
-        int.TryParse(ctx.Claims["age"], out var a) && a >= minAge;
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, int minAge, CancellationToken ct = default)
+        => new(int.TryParse(ctx.Claims["age"], out var a) && a >= minAge
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure("min_age.below", $"age below {minAge}"));
 }
 ```
 
@@ -47,11 +52,11 @@ public sealed class MinAgePolicy : IAuthorizationPolicy<int>
 **Open questions:**
 - Generic `IAuthorizationPolicy<T>` per arg type, or one base interface with `object[]` parameters?
 - Constants only or arbitrary expressions? (Attributes only allow constants.)
-- How does the registry handle parameterless and parameterized variants of the same policy name?
+- How does the generator handle parameterless and parameterized variants of the same policy name?
 
-**Graduation signal:** a host has shipped at least three near-duplicate policies that differ only by a constant.
+**Graduation signal:** a consumer has shipped at least three near-duplicate policies that differ only by a constant.
 
-**Host coupling notes:** **Generator update required** in `ZeroAlloc.Mediator.Authorization`. The host's generator must forward the constructor args from `[Authorize("MinAge", 18)]` to the policy resolver (currently it only reads the policy-name positional arg). Without the host update, args silently ignored. Same `ZAMA005` mitigation as item #1.
+**Generator coupling notes:** the bundled generator currently reads only the positional `policyName` arg. Adding parameter forwarding requires the generator to capture the additional constructor args from `[RequirePolicy(...)]` and pass them into the policy's `EvaluateAsync` call site.
 
 ## 3. Resource-based authorization
 
@@ -65,12 +70,15 @@ public interface IResourceSecurityContext<TResource> : ISecurityContext
 
 public sealed class OwnerOnlyPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) =>
-        ctx is IResourceSecurityContext<Post> rc && rc.Resource.OwnerId == ctx.Id;
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+        => new(ctx is IResourceSecurityContext<Post> rc && rc.Resource.OwnerId == ctx.Id
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure("resource.not_owner"));
 }
 ```
 
-**Why:** today every host invents its own subinterface (`IToolCallSecurityContext`, planned `IRequestSecurityContext<TRequest>`). A shared `IResourceSecurityContext<T>` lets the *same* policy class work across hosts when the resource type matches.
+**Why:** today every host invents its own subinterface (`IToolCallSecurityContext`, `IRequestSecurityContext<TRequest>`). A shared `IResourceSecurityContext<T>` lets the *same* policy class work across hosts when the resource type matches.
 
 **Open questions:**
 - Generic interface in core, or leave to hosts and accept the divergence?
@@ -79,65 +87,28 @@ public sealed class OwnerOnlyPolicy : IAuthorizationPolicy
 
 **Graduation signal:** at least two hosts want to share a policy that operates on a typed resource.
 
-**Host coupling notes:** **Runtime + DI surface change required** in `ZeroAlloc.Mediator.Authorization`. Host must populate the typed-resource context with the request being dispatched — neither `WithAuthorization()` nor the generator currently know about request-as-resource. New runtime API needed (e.g. `opts.UseResourceBoundContext()`); generator must emit per-request resource binding. Likely a v4.x → v4.y minor for the host. AI.Sentinel would similarly need to populate the resource (the tool call) — neither host adopts trivially.
+**Host coupling notes:** **Runtime + DI surface change required** in `ZeroAlloc.Mediator.Authorization`. Host must populate the typed-resource context with the request being dispatched. AI.Sentinel would similarly need to populate the resource (the tool call) — neither host adopts trivially.
 
-## 4. Standard failure shape
+## 4. Standard failure shape — ✅ shipped (v1.0.0)
 
-**What:** replace `bool IsAuthorized(...)` with a richer return type that carries deny reason / failure code / message.
+**Status:** shipped. `AuthorizationFailure` (with `Code`, `Reason`, `DefaultDenyCode`) and `UnitResult<AuthorizationFailure>` from `ZeroAlloc.Results` are the contract's return shape. v2 made them the only return shape — `EvaluateAsync` always emits a `UnitResult<AuthorizationFailure>`.
 
-```csharp
-public readonly struct AuthorizationResult
-{
-    public bool IsAuthorized { get; }
-    public string? FailureReason { get; }
-    public string? FailureCode { get; }
-}
+## 5. Source-generated policy registry — ✅ shipped (v2.0.0)
 
-public interface IAuthorizationPolicy
-{
-    AuthorizationResult Evaluate(ISecurityContext ctx);
-}
-```
+**Status:** shipped on `feat/policy-registry-generator-v2` (PR #19). The Roslyn generator bundled in the main package discovers `[Policy]`-decorated classes and `[RequirePolicy]`-decorated request types at compile time, emits one `AuthorizerFor<TRequest>` subclass per request, and emits an `AddZeroAllocAuthorization()` extension on `IServiceCollection` that registers everything as scoped.
 
-**Why:** today hosts have to invent their own `UnauthorizedException` / `Forbid()` / `Result.Fail("...")` shapes. A shared structured result lets a host emit consistent telemetry / API responses across policy types.
+**What landed:**
 
-**Open questions:**
-- Use `ZeroAlloc.Results` (`Result<Unit, AuthorizationFailure>`) for ecosystem consistency, or keep the contract dependency-free?
-- Breaking change vs additive — keep `IsAuthorized` as a default-implementation thin wrapper over `Evaluate`?
-- Async story — `ValueTask<AuthorizationResult> EvaluateAsync(...)`?
+- Bundled generator in the main package — no separate `*.Generator` install.
+- Five compile-time diagnostics: `ZAUTH001` (unknown policy name), `ZAUTH002` (duplicate name), `ZAUTH003` (`[Policy]` class doesn't implement `IAuthorizationPolicy`), `ZAUTH004` (abstract/static `[Policy]` class), `ZAUTH005` (`[RequirePolicy]` on non-class/non-struct target).
+- Cross-assembly discovery — `[Policy]` classes in referenced assemblies are picked up alongside in-compilation policies.
+- Attribute rename: `[AuthorizationPolicy]` → `[Policy]`, `[Authorize]` → `[RequirePolicy]`. The name collision with `Microsoft.AspNetCore.Authorization.AuthorizeAttribute` is gone.
+- `[RequirePolicy]` is now class/struct-level only (`AttributeTargets.Class | AttributeTargets.Struct`); method-level usage fires `ZAUTH005`. Still `AllowMultiple = true` for stacking.
+- `IAuthorizationPolicy` collapsed to a single async method: `ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(ISecurityContext, CancellationToken)`.
 
-**Graduation signal:** two hosts have built non-trivial deny-reason logic on top of the boolean and want to unify it.
+**Host migration:**
 
-**Risk:** highest-impact change — touches every existing policy implementation. Defer until the migration cost is justified.
-
-**Host coupling notes:** **Runtime + DI surface change required** in every host. `ZeroAlloc.Mediator.Authorization` exposes `AuthorizationDeniedException` (carrying `AuthorizationFailure`) and `Result<T, AuthorizationFailure>` directly to user code; if the contract's failure shape changes shape (new fields, signature changes), both surfaces shift. Major version bump of the host. AI.Sentinel exposes a similar deny payload through its tool-call result envelope. Both hosts must coordinate on the same major-version cadence.
-
-## 5. Source-generated policy registry
-
-**What:** a Roslyn generator that discovers all `[AuthorizationPolicy]` types at compile time and emits:
-- A name → factory lookup table (no reflection scanning at startup)
-- A DI extension `services.AddZeroAllocAuthorization()` that registers all policies
-- Compile-time diagnostics for duplicate names, name typos in `[Authorize]`, missing policy classes for referenced names
-
-**Why:** today every host independently scans assemblies for `[AuthorizationPolicy]` types. A shared generator removes the reflection scan, eliminates a class of "I forgot to register the policy" bugs, and gives compile-time errors instead of runtime ones. Aligns with the rest of the ZeroAlloc ecosystem (Mediator, Validation, Inject all source-generate registries).
-
-**Open questions:**
-- New package `ZeroAlloc.Authorization.Generator`, or bundled into the main package (per the recent collapse to single-package install)?
-- How does it interact with policies defined in different assemblies / packages? (One `[assembly: ZeroAllocAuthorization]` attribute per consumer assembly, like `Inject`?)
-- Diagnostic IDs — `ZA1500` series?
-
-**Graduation signal:** the second host (Mediator.Authorization) is being built and the author finds themselves writing scan-and-register code.
-
-**Risk:** medium — generator is a new build artifact, must be Native AOT-safe and run cleanly across SDK versions.
-
-**Host coupling notes:** **This item's graduation signal has fired.** `ZeroAlloc.Mediator.Authorization` shipped (PR ZeroAlloc-Net/ZeroAlloc.Mediator#74) with its own host-side `GeneratedAuthorizationLookup` generator — exactly the scan-and-register code the graduation signal anticipated. When this contract-side generator ships, the host's `src/ZeroAlloc.Mediator.Authorization.Generator/` (~80 LOC of `LookupEmitter` + `PolicyDiscovery` + `RequestDiscovery`) gets deleted; the runtime `AuthorizationBehavior` migrates to consume `AuthorizerFor<TRequest>` via DI generic dispatch (matching `Mediator.Validation`'s pattern exactly). AI.Sentinel will adopt similarly — its current scan-and-register code becomes redundant.
-
-Concrete migration path for the host once #5 ships:
-1. Delete `src/ZeroAlloc.Mediator.Authorization.Generator/` entirely.
-2. Replace `MediatorAuthorizationGeneratedHooks.GetPoliciesForRequestType<T>()` with `sp.GetService<AuthorizerFor<T>>()`.
-3. Replace `Resolve(name, sp)` with the same accessor pattern.
-4. Drop the `[ModuleInitializer]` wiring — DI generic dispatch handles everything.
-Net code reduction in the host: ~150 LOC (generator + hooks + tests for both).
+`ZeroAlloc.Mediator.Authorization` v5 has shipped against this contract. The host's `src/ZeroAlloc.Mediator.Authorization.Generator/` was deleted (~150 LOC including `LookupEmitter` + `PolicyDiscovery` + `RequestDiscovery` + hooks + tests). The runtime `AuthorizationBehavior` now resolves `AuthorizerFor<TRequest>` from DI via generic dispatch (matching `Mediator.Validation`'s pattern exactly). AI.Sentinel adoption is the next step.
 
 ## 6. Certify the "ZeroAlloc" promise — ✅ DONE (2026-05-06, PR #11)
 
@@ -147,7 +118,7 @@ Net code reduction in the host: ~150 LOC (generator + hooks + tests for both).
 
 - `<IsAotCompatible>true</IsAotCompatible>` on the main library csproj — already in place from earlier work.
 - `aot-smoke` CI job publishes the sample with `PublishAot=true` and exercises all four hot-path APIs end-to-end on the AOT-compiled binary.
-- `benchmarks/` project with BenchmarkDotNet runs covering `IsAuthorized`, `IsAuthorizedAsync`, `Evaluate`, `EvaluateAsync` — already in place from earlier work.
+- `benchmarks/` project with BenchmarkDotNet runs covering `EvaluateAsync` (the v2 single-method contract).
 - AOT badge in the README — already in place from earlier work.
 - **The missing piece (the core of this item):** a CI-enforceable allocation gate. A 70-LOC `AllocationGate` helper brackets calls with `GC.GetAllocatedBytesForCurrentThread()` and asserts a per-call budget. Used in two places:
   - `tests/AllocationBudgetTests.cs` — JIT-side gate, runs every `dotnet test`. Fails CI if any of the 4 hot-path APIs regresses to allocate.
@@ -155,8 +126,8 @@ Net code reduction in the host: ~150 LOC (generator + hooks + tests for both).
 - Three negative-control self-tests guard the gate itself: `Gate_DetectsAllocation_WhenActionAllocates`, `Gate_RejectsValueTask_NotCompletedSynchronously`, `Gate_TolerantOfWarmupOnlyAllocations`.
 
 **Open questions resolved:**
-- Benchmark target: leaf `IsAuthorized` calls only — keeps the gate tight; host-style measurement lives in the host packages where it belongs (e.g. `Mediator.Authorization`'s own gate).
-- Allocation budget: strict 0 B for all four hot-path APIs. Confirmed achievable on both JIT and AOT runtimes.
+- Benchmark target: leaf `EvaluateAsync` call only — keeps the gate tight; host-style measurement lives in the host packages where it belongs (e.g. `Mediator.Authorization`'s own gate).
+- Allocation budget: strict 0 B for the contract's hot path. Confirmed achievable on both JIT and AOT runtimes.
 
 **Pioneer pattern.** This is the first CI-enforceable allocation gate in the ZeroAlloc family. Sibling packages (Mediator, Cache, Resilience, etc.) can adopt by copying ~70 LOC + declaring their own per-API budget tables. `ZeroAlloc.Mediator.Authorization` shipped today with the same gate (Mediator PR #74), confirming the pattern lifts cleanly.
 
@@ -202,8 +173,8 @@ These are the consumers that will surface graduation signals. Each is its own re
 
 | Host | Status | First version against |
 |---|---|---|
-| [AI.Sentinel](https://github.com/MarcelRoozekrans/AI.Sentinel) | Shipping | v1 contract |
-| ZeroAlloc.Mediator.Authorization | Planned | v1 contract |
+| [AI.Sentinel](https://github.com/MarcelRoozekrans/AI.Sentinel) | Shipping | v1 contract (v2 adoption pending) |
+| ZeroAlloc.Mediator.Authorization | Shipping (v5) | v2 contract |
 | ZeroAlloc.Rest.Authorization (?) | Speculative | TBD |
 | ZeroAlloc.Saga.Authorization (?) | Speculative | TBD |
 
@@ -226,7 +197,7 @@ Companion packages (`ZeroAlloc.Mediator.Authorization`, `AI.Sentinel`, future ho
 | Add an optional attribute constructor overload | Yes — additive |
 | Rename or remove any public type or member | **No** — major |
 
-The existing async contract (`ValueTask<bool> IsAuthorizedAsync(...)` with a default implementation) is the template: when async support was added, the DIM pattern kept implementers of the original interface working. Use the same pattern for any future contract evolution.
+For any future addition to `IAuthorizationPolicy`, use the default-interface-method (DIM) pattern: add the new member with a default implementation that delegates to the existing `EvaluateAsync`. Existing implementers stay binary-compatible; new implementers opt in by overriding.
 
 **Engineering gates that enforce this:**
 

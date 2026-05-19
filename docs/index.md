@@ -6,58 +6,66 @@ sidebar_position: 1
 
 # ZeroAlloc.Authorization
 
-Authorization primitives for .NET. Five types — `ISecurityContext`, `IAuthorizationPolicy`, `[Authorize]`, `[AuthorizationPolicy]`, `AnonymousSecurityContext` — designed to be shared across hosts that need a unified policy contract.
+Authorization primitives for .NET — `ISecurityContext`, `IAuthorizationPolicy`, `[Policy]`, `[RequirePolicy]`, `AnonymousSecurityContext`, and an `AuthorizerFor<TRequest>` dispatcher emitted by the bundled source generator. Designed to be shared across hosts that need a unified policy contract.
 
 ## Quick example
 
 ```csharp
-[AuthorizationPolicy("AdminOnly")]
+[Policy("AdminOnly")]
 public sealed class AdminOnlyPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+        => new(ctx.Roles.Contains("Admin")
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode, "Admin role required"));
 }
 
-public sealed class UserService
-{
-    [Authorize("AdminOnly")]
-    public Task DeleteUserAsync(string userId) { /* ... */ }
-}
+[RequirePolicy("AdminOnly")]
+public sealed record DeleteUserCommand(string UserId);
 ```
 
-The contract package stops here. A host matches the `[Authorize]` policy name to the registered `[AuthorizationPolicy]` class and invokes `IsAuthorized` / `IsAuthorizedAsync` before dispatch.
+Host wiring is a single line:
+
+```csharp
+using ZeroAlloc.Authorization.Generated;
+builder.Services.AddZeroAllocAuthorization();
+```
+
+Per dispatch, the host resolves `AuthorizerFor<TRequest>` from DI and calls `EvaluateAsync(ctx, ct)`. The generator has already discovered every `[Policy]` class and every `[RequirePolicy]`-decorated request, emitted the dispatcher subclasses, and registered them as scoped services.
 
 ---
 
-## What it isn't
+## What ships
 
-This is a **contract** package, not a host. It ships interfaces and attributes — nothing else.
+The package is the full stack — contract types **plus** a bundled Roslyn generator:
 
-- No dispatcher. Nothing calls `IsAuthorized` for you.
-- No DI registration. There is no `AddZeroAllocAuthorization()` extension.
-- No integration with ASP.NET Core, MVC, minimal APIs, or any specific framework.
-- No attribute scanner. Hosts walk the `[AuthorizationPolicy]`-attributed types themselves.
+- Five contract types: `ISecurityContext`, `IAuthorizationPolicy`, `[Policy]`, `[RequirePolicy]`, `AnonymousSecurityContext`.
+- One dispatcher base: `AuthorizerFor<TRequest>` (abstract; the generator emits concrete subclasses).
+- One generator-emitted DI extension: `services.AddZeroAllocAuthorization()`.
+- Five compile-time diagnostics: `ZAUTH001`–`ZAUTH005`.
 
-Hosts provide all of that:
+Hosts (AI.Sentinel, `ZeroAlloc.Mediator.Authorization` v5, your own dispatcher) build a per-request `ISecurityContext`, resolve `AuthorizerFor<TRequest>` from the DI container, call `EvaluateAsync`, and translate the resulting `UnitResult<AuthorizationFailure>` into their outcome shape (HTTP 403, typed exception, tool-call refusal).
+
+Existing hosts:
 
 - [AI.Sentinel](https://github.com/MarcelRoozekrans/AI.Sentinel) — tool-call authorization for `IChatClient`-based agents.
-- `ZeroAlloc.Mediator.Authorization` (planned) — request-handler authorization.
+- `ZeroAlloc.Mediator.Authorization` v5 — request-handler authorization.
 
-If you need an integration that does not exist yet, write a host. The contract is small on purpose.
+If you need an integration that does not exist yet, write a host. The dispatch surface is a single method call.
 
 ---
 
 ## Quick links
 
-- [Getting started](getting-started.md) — install, write your first policy, attach `[Authorize]`.
-- [Policies](core-concepts/policies.md) — `IAuthorizationPolicy`, sync vs async, structured `Evaluate` results.
+- [Getting started](getting-started.md) — install, write your first policy, attach `[RequirePolicy]`.
+- [Policies](core-concepts/policies.md) — `IAuthorizationPolicy`, async-only contract, structured deny.
 - [Security context](core-concepts/security-context.md) — `ISecurityContext`, host-specific subinterfaces, the anonymous singleton.
-- [Attributes](attributes.md) — `[Authorize]` and `[AuthorizationPolicy]` reference.
-- [Host integration](guides/host-integration.md) — how to wire a host to the contract.
+- [Attributes](attributes.md) — `[Policy]` and `[RequirePolicy]` reference.
+- [Host integration](guides/host-integration.md) — how the generator + DI extension fit together.
 
 ---
 
 ## Targets
 
 `net8.0`, `net9.0`, `net10.0`. AOT-compatible — `<IsAotCompatible>true</IsAotCompatible>` is set on the main library and the `samples/ZeroAlloc.Authorization.AotSmoke/` app is exercised on every CI run with `PublishAot=true`.
-
-> **Note:** in ASP.NET Core projects, `using ZeroAlloc.Authorization;` collides with `using Microsoft.AspNetCore.Authorization;` over the `[Authorize]` name. Use a `using` alias (`using ZAuthorize = ZeroAlloc.Authorization;`) or fully-qualify one side at the call site.

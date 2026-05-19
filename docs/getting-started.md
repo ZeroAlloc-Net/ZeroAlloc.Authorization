@@ -12,89 +12,128 @@ sidebar_position: 2
 dotnet add package ZeroAlloc.Authorization
 ```
 
-Targets `net8.0`, `net9.0`, `net10.0`. AOT-compatible.
-
-> **Note:** in ASP.NET Core projects, `using ZeroAlloc.Authorization;` collides with `using Microsoft.AspNetCore.Authorization;` over the `[Authorize]` name. Use a `using` alias (`using ZAuthorize = ZeroAlloc.Authorization;`) or fully-qualify one side at the call site.
+Targets `net8.0`, `net9.0`, `net10.0`. AOT-compatible. The package bundles a Roslyn source generator — no separate `*.Generator` install.
 
 ## Write your first policy
 
-A policy is a class that implements `IAuthorizationPolicy` and is named with `[AuthorizationPolicy("...")]`:
+A policy is a class that implements `IAuthorizationPolicy` and is named with `[Policy("...")]`:
 
 ```csharp
 using ZeroAlloc.Authorization;
+using ZeroAlloc.Results;
 
-[AuthorizationPolicy("AdminOnly")]
+[Policy("AdminOnly")]
 public sealed class AdminOnlyPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+        => new(ctx.Roles.Contains("Admin")
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode, "Admin role required"));
 }
 ```
 
-The string passed to `[AuthorizationPolicy]` is the **registration name** — hosts use it to map an `[Authorize]` reference back to this class.
+The string passed to `[Policy]` is the **registration name** — the generator uses it to map a `[RequirePolicy("...")]` reference back to this class.
 
-For I/O-bound checks (tenant lookup, external claims service), override `IsAuthorizedAsync` instead and let the sync method throw `InvalidOperationException` — hosts that cannot dispatch asynchronously will treat the throw as a deny:
+The contract is async-only: every policy overrides a single `EvaluateAsync` method. Sync-completing policies wrap their result in `new ValueTask<...>(syncResult)` — the value-typed `UnitResult<AuthorizationFailure>` keeps the happy path allocation-free.
+
+For I/O-bound checks (tenant lookup, external claims service), `await` inside `EvaluateAsync`:
 
 ```csharp
-[AuthorizationPolicy("ActiveTenant")]
+[Policy("ActiveTenant")]
 public sealed class ActiveTenantPolicy(ITenantService tenants) : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) =>
-        throw new InvalidOperationException("Use async — tenant lookup is I/O-bound.");
-
-    public async ValueTask<bool> IsAuthorizedAsync(ISecurityContext ctx, CancellationToken ct = default)
-        => await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+    public async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+    {
+        var active = await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+        return active
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure("tenant.inactive", "tenant is suspended");
+    }
 }
 ```
 
-## Attach `[Authorize]` to a method
+## Attach `[RequirePolicy]` to a request type
 
-Reference the policy by name on the method (or class) you want guarded:
+Reference the policy by name on the request class or struct you want guarded. `[RequirePolicy]` targets **types only** — it cannot be placed on methods (`ZAUTH005` fires at compile time):
 
 ```csharp
-public sealed class UserService
-{
-    [Authorize("AdminOnly")]
-    public Task DeleteUserAsync(string userId)
-    {
-        // ...
-        return Task.CompletedTask;
-    }
-
-    [Authorize("ActiveTenant")]
-    [Authorize("AdminOnly")]
-    public Task PurgeTenantAsync(string tenantId)
-    {
-        // Multiple [Authorize] attributes apply — host evaluates them all and
-        // requires every policy to allow before dispatch.
-        return Task.CompletedTask;
-    }
-}
+[RequirePolicy("AdminOnly")]
+public sealed record DeleteUserCommand(string UserId);
 ```
 
-`[Authorize]` is `AllowMultiple = true` and targets methods or classes — class-level placement applies the policy to every method on the type, subject to host semantics.
+Stack the attribute to require multiple policies — `AllowMultiple = true`, and every policy must allow:
+
+```csharp
+[RequirePolicy("ActiveTenant")]
+[RequirePolicy("AdminOnly")]
+public sealed record PurgeTenantCommand(string TenantId);
+```
 
 ## What happens at runtime
 
-Nothing — until a host runs. This package ships only the contract; it has no dispatcher, no DI registration, no scanner. A host inspects `[Authorize]` on the dispatch target, looks up the matching `[AuthorizationPolicy]` class in its registry, builds an `ISecurityContext` from the current request, and calls `IsAuthorized` / `IsAuthorizedAsync`. If the policy denies, the host short-circuits before invoking the user code.
+The bundled source generator inspects your compilation for `[Policy]`-decorated classes and `[RequirePolicy]`-decorated request types, then emits:
 
-See [Host integration](guides/host-integration.md) for the full wiring contract a host must satisfy.
+- One `AuthorizerFor<TRequest>` subclass per request type, calling the named policies in order.
+- An `AddZeroAllocAuthorization()` extension method on `IServiceCollection` that registers every `[Policy]` class and every emitted `AuthorizerFor<T>` as scoped services.
+
+Hosts wire DI once and resolve `AuthorizerFor<TRequest>` per dispatch:
+
+```csharp
+using ZeroAlloc.Authorization.Generated;
+
+builder.Services.AddZeroAllocAuthorization();
+```
+
+Per request:
+
+```csharp
+var authorizer = sp.GetService<AuthorizerFor<DeleteUserCommand>>();
+if (authorizer is not null)
+{
+    var result = await authorizer.EvaluateAsync(securityContext, ct);
+    if (result.IsFailure)
+    {
+        // host translates result.Error.Code / Reason into HTTP 403 or equivalent
+        return Forbid(result.Error);
+    }
+}
+```
+
+If no `AuthorizerFor<T>` is registered for a request type, the request has no policies — proceed.
 
 ## Existing hosts
 
 - [AI.Sentinel](https://github.com/MarcelRoozekrans/AI.Sentinel) — tool-call authorization for `IChatClient`-based agents.
-- `ZeroAlloc.Mediator.Authorization` (planned) — request-handler authorization.
+- `ZeroAlloc.Mediator.Authorization` v5 — request-handler authorization built on `AuthorizerFor<TRequest>` resolved from DI.
 
 ## Anonymous callers
 
-When a host has no caller identity to attach, it should pass `AnonymousSecurityContext.Instance` — a singleton with `Id = "anonymous"`, no roles, no claims. Reference-equality with `Instance` is the cheapest way for a policy to reject anonymous callers:
+When a host has no caller identity to attach, pass `AnonymousSecurityContext.Instance` — a singleton with `Id = "anonymous"`, no roles, no claims. Reference-equality with `Instance` is the cheapest way for a policy to reject anonymous callers:
 
 ```csharp
-public bool IsAuthorized(ISecurityContext ctx)
-    => !ReferenceEquals(ctx, AnonymousSecurityContext.Instance) && ctx.Roles.Contains("Admin");
+public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+    ISecurityContext ctx, CancellationToken ct = default)
+    => new(!ReferenceEquals(ctx, AnonymousSecurityContext.Instance) && ctx.Roles.Contains("Admin")
+        ? UnitResult<AuthorizationFailure>.Success()
+        : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode, "Admin role required"));
 ```
+
+## Generator diagnostics
+
+The generator emits five compile-time diagnostics to catch wiring mistakes before they hit production:
+
+| ID | Fires when |
+|---|---|
+| `ZAUTH001` | `[RequirePolicy("X")]` references a policy name with no matching `[Policy("X")]` in this compilation or referenced assemblies. |
+| `ZAUTH002` | Two `[Policy("X")]` declarations use the same name. |
+| `ZAUTH003` | `[Policy]`-decorated class does not implement `IAuthorizationPolicy`. |
+| `ZAUTH004` | `[Policy]`-decorated class is abstract or static (cannot be instantiated by DI). |
+| `ZAUTH005` | `[RequirePolicy]` placed on a non-class/non-struct target (interface, delegate, primitive, method). |
 
 ## Next
 
-- [Attributes](attributes.md) — full `[Authorize]` / `[AuthorizationPolicy]` reference.
-- [Policies](core-concepts/policies.md) — sync vs async, structured `Evaluate` failures.
-- [Host integration](guides/host-integration.md) — write your own dispatcher.
+- [Attributes](attributes.md) — full `[Policy]` / `[RequirePolicy]` reference.
+- [Policies](core-concepts/policies.md) — async-only contract, structured deny information.
+- [Host integration](guides/host-integration.md) — how the generator + DI extension fit together.

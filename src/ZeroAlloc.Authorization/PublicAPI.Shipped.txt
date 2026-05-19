@@ -8,11 +8,21 @@ ZeroAlloc.Authorization.AuthorizationFailure.AuthorizationFailure() -> void
 ZeroAlloc.Authorization.AuthorizationFailure.AuthorizationFailure(string! code, string? reason = null) -> void
 ZeroAlloc.Authorization.AuthorizationFailure.Code.get -> string!
 ZeroAlloc.Authorization.AuthorizationFailure.Reason.get -> string?
+ZeroAlloc.Authorization.AuthorizerFor<TRequest>
+ZeroAlloc.Authorization.AuthorizerFor<TRequest>.AuthorizerFor() -> void
 ZeroAlloc.Authorization.IAuthorizationPolicy
+ZeroAlloc.Authorization.IAuthorizationPolicy.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>
 ZeroAlloc.Authorization.ISecurityContext
 ZeroAlloc.Authorization.ISecurityContext.Claims.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
 ZeroAlloc.Authorization.ISecurityContext.Id.get -> string!
 ZeroAlloc.Authorization.ISecurityContext.Roles.get -> System.Collections.Generic.IReadOnlySet<string!>!
+ZeroAlloc.Authorization.PolicyAttribute
+ZeroAlloc.Authorization.PolicyAttribute.Name.get -> string!
+ZeroAlloc.Authorization.PolicyAttribute.PolicyAttribute(string! name) -> void
+ZeroAlloc.Authorization.RequirePolicyAttribute
+ZeroAlloc.Authorization.RequirePolicyAttribute.PolicyName.get -> string!
+ZeroAlloc.Authorization.RequirePolicyAttribute.RequirePolicyAttribute(string! policyName) -> void
+abstract ZeroAlloc.Authorization.AuthorizerFor<TRequest>.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>
 const ZeroAlloc.Authorization.AnonymousSecurityContext.AnonymousId = "anonymous" -> string!
 const ZeroAlloc.Authorization.AuthorizationFailure.DefaultDenyCode = "policy.deny" -> string!
 static readonly ZeroAlloc.Authorization.AnonymousSecurityContext.Instance -> ZeroAlloc.Authorization.AnonymousSecurityContext!

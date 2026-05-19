@@ -6,7 +6,7 @@ sidebar_position: 3
 
 # Testing Policies
 
-Policies are small, side-effect-free classes — easy to unit-test without any host or DI container. This guide shows the patterns the in-repo test suite uses (see `tests/ZeroAlloc.Authorization.Tests/AuthorizationPolicyEvaluateTests.cs` for tone and conventions).
+Policies are small, side-effect-free classes — easy to unit-test without any host or DI container. This guide shows the patterns the in-repo test suite uses.
 
 See also: [policies](../core-concepts/policies.md), [security-context](../core-concepts/security-context.md), [failure-shape](../core-concepts/failure-shape.md).
 
@@ -36,79 +36,85 @@ For the anonymous case, use `AnonymousSecurityContext.Instance` directly — it'
 
 ---
 
-## Test the sync override
+## Test a sync-completing policy
 
-For a pure-CPU policy, arrange the context, act, assert:
+For a CPU-bound policy that returns a completed `ValueTask`, arrange the context, act, assert. `xUnit`'s `[Fact]` + `async Task` covers the await — or call `.GetAwaiter().GetResult()` on a known-completed `ValueTask` if you prefer fully-sync tests.
 
 ```csharp
 [Fact]
-public void IsAuthorized_AdminInRoles_ReturnsTrue()
+public async Task EvaluateAsync_AdminInRoles_Success()
 {
     var policy = new AdminOnlyPolicy();
-    Assert.True(policy.IsAuthorized(Admin));
+    var result = await policy.EvaluateAsync(Admin);
+    Assert.True(result.IsSuccess);
 }
 
 [Fact]
-public void IsAuthorized_NoAdminRole_ReturnsFalse()
+public async Task EvaluateAsync_NoAdminRole_FailsWithDefaultDenyCode()
 {
     var ctx = new TestContext("bob", new HashSet<string>(), new Dictionary<string, string>());
     var policy = new AdminOnlyPolicy();
-    Assert.False(policy.IsAuthorized(ctx));
-}
-```
 
-Same pattern for `Evaluate` — assert on `result.IsSuccess`:
+    var result = await policy.EvaluateAsync(ctx);
 
-```csharp
-[Fact]
-public void Evaluate_AdminInRoles_Success()
-{
-    var policy = new AdminOnlyPolicy();
-    var result = policy.Evaluate(Admin);
-    Assert.True(result.IsSuccess);
+    Assert.False(result.IsSuccess);
+    Assert.Equal(AuthorizationFailure.DefaultDenyCode, result.Error.Code);
 }
 ```
 
 ---
 
-## Test the async override
+## Test an I/O-bound policy
 
-`xUnit`'s `[Fact]` + `async Task` covers `IsAuthorizedAsync` and `EvaluateAsync`:
+Inject a fake dependency, await the call:
 
 ```csharp
 [Fact]
-public async Task IsAuthorizedAsync_ActiveTenant_ReturnsTrue()
+public async Task EvaluateAsync_ActiveTenant_Success()
 {
     var tenants = new FakeTenantService(active: true);
-    var policy = new TenantPolicy(tenants);
-    Assert.True(await ((IAuthorizationPolicy)policy).IsAuthorizedAsync(Admin));
+    var policy = new ActiveTenantPolicy(tenants);
+
+    var result = await policy.EvaluateAsync(Admin);
+
+    Assert.True(result.IsSuccess);
+}
+
+[Fact]
+public async Task EvaluateAsync_InactiveTenant_EmitsTenantInactive()
+{
+    var tenants = new FakeTenantService(active: false);
+    var policy = new ActiveTenantPolicy(tenants);
+
+    var result = await policy.EvaluateAsync(Admin);
+
+    Assert.False(result.IsSuccess);
+    Assert.Equal("tenant.inactive", result.Error.Code);
 }
 ```
 
-Cast to `IAuthorizationPolicy` to invoke the interface entry point — that confirms the dispatch path your host actually uses.
+Cast to `IAuthorizationPolicy` if you want to exercise the interface dispatch path explicitly — both `(policy).EvaluateAsync(...)` and `((IAuthorizationPolicy)policy).EvaluateAsync(...)` hit the same body, but the interface-typed call confirms the seam a host actually uses.
 
 ---
 
 ## Testing structured deny
 
-When a policy overrides `Evaluate` to emit a coded `AuthorizationFailure`, assert all three pieces — success flag, code, reason:
+When a policy emits a coded `AuthorizationFailure`, assert all three pieces — success flag, code, reason:
 
 ```csharp
 [Fact]
-public void Evaluate_NoAdmin_EmitsRoleDeny()
+public async Task EvaluateAsync_NoAdmin_EmitsRoleDeny()
 {
     var ctx = new TestContext("bob", new HashSet<string>(), new Dictionary<string, string>());
     IAuthorizationPolicy policy = new RichDenyPolicy();
 
-    var result = policy.Evaluate(ctx);
+    var result = await policy.EvaluateAsync(ctx);
 
     Assert.False(result.IsSuccess);
     Assert.Equal("policy.deny.role", result.Error.Code);
     Assert.Equal("user is not Admin", result.Error.Reason);
 }
 ```
-
-This mirrors `AuthorizationPolicyEvaluateTests.Evaluate_OverrideEmitsCustomCode` in the in-repo test suite.
 
 ---
 
@@ -125,7 +131,7 @@ private sealed record ToolCallContext(
     IReadOnlyDictionary<string, object?> Args) : IToolCallSecurityContext;
 
 [Fact]
-public void IsAuthorized_DestructiveTool_Denies()
+public async Task EvaluateAsync_DestructiveTool_Denies()
 {
     var ctx = new ToolCallContext(
         "alice",
@@ -136,7 +142,9 @@ public void IsAuthorized_DestructiveTool_Denies()
 
     var policy = new NoDestructiveToolsPolicy();
 
-    Assert.False(policy.IsAuthorized(ctx));
+    var result = await policy.EvaluateAsync(ctx);
+
+    Assert.False(result.IsSuccess);
 }
 ```
 
@@ -146,28 +154,28 @@ The downcast inside the policy body sees the subinterface and reads `ToolName`. 
 
 ## Testing cancellation
 
-Pre-cancel a `CancellationTokenSource` and assert that `IsAuthorizedAsync` / `EvaluateAsync` throw `OperationCanceledException`. The default async wrapper calls `ct.ThrowIfCancellationRequested()` synchronously before dispatch, so a pre-cancelled token short-circuits before the await:
+Pre-cancel a `CancellationTokenSource` and assert that `EvaluateAsync` throws `OperationCanceledException`. A policy that calls `ct.ThrowIfCancellationRequested()` synchronously before its body short-circuits without dispatching:
 
 ```csharp
 [Fact]
-public async Task IsAuthorizedAsync_PreCancelledToken_Throws()
+public async Task EvaluateAsync_PreCancelledToken_Throws()
 {
     IAuthorizationPolicy policy = new AdminOnlyPolicy();
     using var cts = new CancellationTokenSource();
     cts.Cancel();
 
     await Assert.ThrowsAnyAsync<OperationCanceledException>(
-        async () => await policy.IsAuthorizedAsync(Admin, cts.Token).ConfigureAwait(false));
+        async () => await policy.EvaluateAsync(Admin, cts.Token).ConfigureAwait(false));
 }
 ```
 
-This mirrors `AuthorizationPolicyAsyncTests.AsyncDefault_PreCancelledToken_ThrowsOperationCanceled` — same shape, same expectation. For policies whose async override does real I/O, also test mid-flight cancellation by cancelling after the call begins; pass `ct` through to the underlying client and trust it to propagate.
+For policies whose `EvaluateAsync` does real I/O, also test mid-flight cancellation by cancelling after the call begins; pass `ct` through to the underlying client and trust it to propagate.
 
 ---
 
 ## Conventions
 
 - **No DI in unit tests.** Construct the policy with `new` and pass dependencies as constructor arguments — it's a sealed class with no magic.
-- **Use `IAuthorizationPolicy`-typed variables** when invoking dispatch entry points so you exercise the same surface a host would.
+- **Use `IAuthorizationPolicy`-typed variables** when invoking the dispatch entry point so you exercise the same surface a host (and the generator-emitted `AuthorizerFor<T>`) would.
 - **One assertion family per `[Fact]`** — code, reason, and `IsSuccess` together count as one family; mixing unrelated checks bloats failure messages.
-- **Mirror in-repo test naming** — `Method_Condition_Outcome` (e.g. `Evaluate_NoAdmin_EmitsRoleDeny`). Future readers find tests by grepping the condition.
+- **Mirror in-repo test naming** — `Method_Condition_Outcome` (e.g. `EvaluateAsync_NoAdmin_EmitsRoleDeny`). Future readers find tests by grepping the condition.

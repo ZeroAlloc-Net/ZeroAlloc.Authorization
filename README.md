@@ -6,11 +6,11 @@
 [![AOT](https://img.shields.io/badge/AOT--Compatible-passing-brightgreen)](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/MarcelRoozekrans?style=flat&logo=githubsponsors&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/MarcelRoozekrans)
 
-Authorization primitives for .NET. Five types — `ISecurityContext`, `IAuthorizationPolicy`, `[Authorize]`, `[AuthorizationPolicy]`, `AnonymousSecurityContext` — designed to be shared across hosts that need a unified policy contract.
+Authorization primitives for .NET — `ISecurityContext`, `IAuthorizationPolicy`, `[Policy]`, `[RequirePolicy]`, `AnonymousSecurityContext`, and an `AuthorizerFor<TRequest>` dispatcher emitted by the bundled source generator.
 
 Used by:
 - [AI.Sentinel](https://github.com/MarcelRoozekrans/AI.Sentinel) — tool-call authorization for `IChatClient`-based agents
-- ZeroAlloc.Mediator.Authorization (planned) — request-handler authorization
+- `ZeroAlloc.Mediator.Authorization` v5 — request-handler authorization
 
 ## Install
 
@@ -18,11 +18,7 @@ Used by:
 dotnet add package ZeroAlloc.Authorization
 ```
 
-Targets `net8.0`, `net9.0`, `net10.0`.
-
-> **Host required.** This package only ships the contract types. A host (AI.Sentinel, ZeroAlloc.Mediator.Authorization, your own dispatcher) must match `[Authorize]` to a registered `[AuthorizationPolicy]` and invoke `IsAuthorized` / `IsAuthorizedAsync` before dispatch.
-
-> **Note:** if you're in an ASP.NET Core project, `using ZeroAlloc.Authorization;` will collide with `using Microsoft.AspNetCore.Authorization;` over the `[Authorize]` name. Use a `using` alias (`using ZAuthorize = ZeroAlloc.Authorization;`) or fully-qualify one side at the call site.
+Targets `net8.0`, `net9.0`, `net10.0`. The package bundles a Roslyn source generator — no separate `*.Generator` install.
 
 ## The contract
 
@@ -36,67 +32,105 @@ public interface ISecurityContext
 
 public interface IAuthorizationPolicy
 {
-    bool IsAuthorized(ISecurityContext ctx);
-    ValueTask<bool> IsAuthorizedAsync(ISecurityContext ctx, CancellationToken ct = default)
-        => ValueTask.FromResult(IsAuthorized(ctx));
+    ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default);
 }
 ```
 
 ## Writing a policy
 
 ```csharp
-[AuthorizationPolicy("AdminOnly")]
+[Policy("AdminOnly")]
 public sealed class AdminOnlyPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+        => new(ctx.Roles.Contains("Admin")
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode, "Admin role required"));
 }
 ```
 
-Bind it on a method:
+Bind it on a request type — `[RequirePolicy]` is class/struct-level only, and stacks:
 
 ```csharp
-public sealed class UserService
+[RequirePolicy("AdminOnly")]
+public sealed record DeleteUserCommand(string UserId);
+
+[RequirePolicy("ActiveTenant")]
+[RequirePolicy("AdminOnly")]
+public sealed record PurgeTenantCommand(string TenantId);
+```
+
+## Host wiring
+
+The bundled generator emits one `AuthorizerFor<TRequest>` subclass per `[RequirePolicy]`-decorated type plus an `AddZeroAllocAuthorization()` extension on `IServiceCollection`. Hosts call the extension at startup and resolve `AuthorizerFor<T>` per request:
+
+```csharp
+using ZeroAlloc.Authorization.Generated;
+
+builder.Services.AddZeroAllocAuthorization();
+```
+
+```csharp
+var authorizer = sp.GetService<AuthorizerFor<DeleteUserCommand>>();
+if (authorizer is not null)
 {
-    [Authorize("AdminOnly")]
-    public Task DeleteUserAsync(string userId) { ... }
+    var result = await authorizer.EvaluateAsync(securityContext, ct);
+    if (result.IsFailure)
+        return Forbid(result.Error); // host maps Code / Reason to its outcome shape
 }
 ```
 
 ## Hosts can extend `ISecurityContext`
 
-Hosts define their own subinterface for richer payloads. AI.Sentinel adds `IToolCallSecurityContext : ISecurityContext` with `ToolName` + `Args`. Mediator.Authorization will add `IRequestSecurityContext<TRequest>`. Inside the policy body, downcast:
+Hosts define their own subinterface for richer payloads. AI.Sentinel adds `IToolCallSecurityContext : ISecurityContext` with `ToolName` + `Args`. `ZeroAlloc.Mediator.Authorization` v5 adds `IRequestSecurityContext<TRequest>`. Inside the policy body, downcast:
 
 ```csharp
-public bool IsAuthorized(ISecurityContext ctx)
-    => ctx is IToolCallSecurityContext tc && tc.ToolName != "delete_database";
+public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+    ISecurityContext ctx, CancellationToken ct = default)
+    => new(ctx is IToolCallSecurityContext tc && tc.ToolName == "delete_database"
+        ? new AuthorizationFailure("tool.destructive", "destructive tool blocked")
+        : UnitResult<AuthorizationFailure>.Success());
 ```
 
-## Async overrides
+## I/O-bound policies
 
-For I/O-bound checks (tenant lookup, external claims validation), override `IsAuthorizedAsync`:
+For checks that need to await something (tenant lookup, external claims validation), mark `EvaluateAsync` as `async`:
 
 ```csharp
-public sealed class TenantPolicy(ITenantService tenants) : IAuthorizationPolicy
+[Policy("ActiveTenant")]
+public sealed class ActiveTenantPolicy(ITenantService tenants) : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) =>
-        throw new InvalidOperationException("Use async — tenant lookup is I/O-bound.");
-
-    public async ValueTask<bool> IsAuthorizedAsync(ISecurityContext ctx, CancellationToken ct = default)
-        => await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+    public async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+    {
+        var active = await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+        return active
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure("tenant.inactive", "tenant is suspended");
+    }
 }
 ```
 
-The host is responsible for calling the async overload.
+## Generator diagnostics
+
+The bundled generator emits five compile-time diagnostics:
+
+| ID | Fires when |
+|---|---|
+| `ZAUTH001` | `[RequirePolicy("X")]` references a policy name with no matching `[Policy("X")]`. |
+| `ZAUTH002` | Two `[Policy("X")]` declarations share the same name. |
+| `ZAUTH003` | `[Policy]` class doesn't implement `IAuthorizationPolicy`. |
+| `ZAUTH004` | `[Policy]` class is abstract or static. |
+| `ZAUTH005` | `[RequirePolicy]` placed on a non-class/non-struct target. |
 
 ## Performance
 
-BenchmarkDotNet (BDN ShortRun, .NET 10 release build, x64) — happy path on a simple role-check policy. The full release-time benchmark uses BDN's default job for tight confidence intervals; the indicative numbers below are from a development-time short run.
+BenchmarkDotNet (BDN ShortRun, .NET 10 release build, x64) — happy path on a simple role-check policy:
 
 | Method | Mean | Allocated |
 |---|---:|---:|
-| `IsAuthorized` | ~9 ns | 0 B |
-| `IsAuthorizedAsync` | ~31 ns | 0 B |
-| `Evaluate` | ~7 ns | 0 B |
 | `EvaluateAsync` | ~99 ns | 0 B |
 
 Source: [`benchmarks/ZeroAlloc.Authorization.Benchmarks/PolicyEvaluationBenchmarks.cs`](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/benchmarks/ZeroAlloc.Authorization.Benchmarks/PolicyEvaluationBenchmarks.cs).

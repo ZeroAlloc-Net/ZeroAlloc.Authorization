@@ -6,102 +6,71 @@ sidebar_position: 4
 
 # Sync vs Async
 
-`IAuthorizationPolicy` exposes both sync and async entry points so policies can opt into the shape that matches their actual work. The defaults funnel everything to `IsAuthorized`, so opting in is purely additive.
-
-## Decision matrix
-
-| Your check is... | Override |
-|---|---|
-| Pure CPU — role / claim membership, simple predicates | `IsAuthorized` only. |
-| I/O-bound — DB lookup, HTTP call, external claims | `IsAuthorizedAsync`. Throw from `IsAuthorized`. |
-| Sync, but you want a coded deny reason | `Evaluate`, returning `UnitResult<AuthorizationFailure>`. |
-| Both I/O-bound and structured deny info | `EvaluateAsync`. |
-
-See [failure shape](failure-shape.md) for the structured-result types.
-
----
-
-## Pure CPU
+There is no choice in v2 — `IAuthorizationPolicy` exposes a single async entry point, `EvaluateAsync`, and every policy implements it.
 
 ```csharp
-[AuthorizationPolicy("AdminOnly")]
-public sealed class AdminOnlyPolicy : IAuthorizationPolicy
+public interface IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
+    ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default);
 }
 ```
 
-Hosts may dispatch via `IsAuthorized`, `IsAuthorizedAsync`, `Evaluate`, or `EvaluateAsync` — all four reach the same body. The async wrappers use `ValueTask.FromResult`, which does not heap-allocate.
+The four-method v1 surface (`IsAuthorized`, `IsAuthorizedAsync`, `Evaluate`, `EvaluateAsync`) is gone. One method, async-shaped, structured-result return.
 
-## I/O-bound
+---
+
+## Sync-completing policies
+
+A CPU-bound check that does no I/O still implements `EvaluateAsync` — it just wraps the synchronous result in a completed `ValueTask`:
 
 ```csharp
-[AuthorizationPolicy("ActiveTenant")]
-public sealed class ActiveTenantPolicy(ITenantService tenants) : IAuthorizationPolicy
+[Policy("AdminOnly")]
+public sealed class AdminOnlyPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) =>
-        throw new InvalidOperationException("Use async — tenant lookup is I/O-bound.");
-
-    public async ValueTask<bool> IsAuthorizedAsync(
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
         ISecurityContext ctx, CancellationToken ct = default)
-        => await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
-}
-```
-
-Hosts that can dispatch async should call `IsAuthorizedAsync`. Hosts that cannot (rare; typically a constraint of the framework being guarded) should treat the `InvalidOperationException` as a deny, not as a fault. This is the convention codified in the README's `TenantPolicy` example.
-
-## Structured deny
-
-```csharp
-[AuthorizationPolicy("AdminOnly")]
-public sealed class AdminOnlyPolicy : IAuthorizationPolicy
-{
-    public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
-
-    public UnitResult<AuthorizationFailure> Evaluate(ISecurityContext ctx)
-        => ctx.Roles.Contains("Admin")
+        => new(ctx.Roles.Contains("Admin")
             ? UnitResult<AuthorizationFailure>.Success()
-            : new AuthorizationFailure("policy.deny.role", "user is not Admin");
+            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode, "Admin role required"));
 }
 ```
 
-When a host calls `Evaluate` directly, it gets the coded deny. When it calls `IsAuthorized`, it still gets a `bool`. The two are kept in sync by the policy author — the contract does not enforce consistency.
+`new ValueTask<UnitResult<AuthorizationFailure>>(syncResult)` is the allocation-free wrap. Both `UnitResult<AuthorizationFailure>` and `AuthorizationFailure` are value types, so the whole expression lives on the stack — no `Task` heap allocation, no boxing.
 
 ---
 
-## Performance
+## I/O-bound policies
 
-Every entry point is zero-allocation on the happy path. From the [README](../../README.md) benchmark table (BDN ShortRun, .NET 10 release, x64, simple role-check policy):
+When you genuinely need to `await`, mark the method `async` and let the compiler build the state machine:
 
-| Method | Mean | Allocated |
-|---|---:|---:|
-| `IsAuthorized` | ~9 ns | 0 B |
-| `IsAuthorizedAsync` | ~31 ns | 0 B |
-| `Evaluate` | ~7 ns | 0 B |
-| `EvaluateAsync` | ~99 ns | 0 B |
+```csharp
+public async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+    ISecurityContext ctx, CancellationToken ct = default)
+{
+    var active = await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+    return active
+        ? UnitResult<AuthorizationFailure>.Success()
+        : new AuthorizationFailure("tenant.inactive", "tenant is suspended");
+}
+```
 
-`IsAuthorizedAsync` stays at 0 B because the default wrapper is `ValueTask.FromResult(IsAuthorized(ctx))`. `EvaluateAsync` stays at 0 B because `UnitResult<AuthorizationFailure>` is a value type and `AuthorizationFailure` is a `readonly struct`. Async overrides that hit real I/O will allocate the state machine on first await; that cost is unavoidable and lives in your tenant lookup, not in this contract.
+The first await on a non-completed task allocates the state machine — that cost lives in your I/O, not in the contract.
 
 ---
 
 ## Cancellation
 
-Both async entry points accept a `CancellationToken`:
+`EvaluateAsync` accepts a `CancellationToken`. The host's dispatcher passes the request's token through; your override is responsible for honoring it during awaits — pass it into the underlying client (HTTP, DB) and don't swallow `OperationCanceledException`. For sync-completing policies it costs nothing to call `ct.ThrowIfCancellationRequested()` before the body if you want a pre-cancelled token to short-circuit.
 
 ```csharp
-ValueTask<bool> IsAuthorizedAsync(ISecurityContext ctx, CancellationToken ct = default);
-ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
-    ISecurityContext ctx, CancellationToken ct = default);
-```
-
-The default implementations call `ct.ThrowIfCancellationRequested()` synchronously before invoking the underlying check, so a cancelled token short-circuits without dispatching. Once your override starts awaiting I/O, your code is responsible for honoring `ct` during the await — pass it into the underlying client (HTTP, DB) and don't swallow `OperationCanceledException`.
-
-```csharp
-public async ValueTask<bool> IsAuthorizedAsync(
+public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
     ISecurityContext ctx, CancellationToken ct = default)
 {
     ct.ThrowIfCancellationRequested();
-    return await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+    return new(ctx.Roles.Contains("Admin")
+        ? UnitResult<AuthorizationFailure>.Success()
+        : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode, "Admin role required"));
 }
 ```
 
@@ -109,6 +78,6 @@ public async ValueTask<bool> IsAuthorizedAsync(
 
 ## See also
 
-- [Policies](policies.md) — the four-method contract these examples implement.
+- [Policies](policies.md) — the single-method `EvaluateAsync` contract.
 - [Failure shape](failure-shape.md) — `AuthorizationFailure` deny codes.
 - [Security context](security-context.md) — what `ctx` carries.

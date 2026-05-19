@@ -6,22 +6,62 @@ sidebar_position: 2
 
 # Host Integration
 
-ZeroAlloc.Authorization ships only the contract. Everything that *runs* — discovery, registration, dispatch, response mapping — lives in the host. This guide describes the responsibilities a host must satisfy and the patterns existing hosts use.
+ZeroAlloc.Authorization v2 ships the contract **and** a Roslyn source generator. The generator owns the assembly-walk and the name → policy lookup that hosts used to write by hand. A host now does three things: call `AddZeroAllocAuthorization()` at startup, build an `ISecurityContext` per request, and resolve `AuthorizerFor<TRequest>` from DI at dispatch.
 
 See also: [policies](../core-concepts/policies.md), [security-context](../core-concepts/security-context.md), [attributes](../attributes.md).
 
 ---
 
-## Host responsibilities
+## What the generator emits
 
-A host integrates ZeroAlloc.Authorization by doing four things, in order:
+When a consumer's compilation includes `[Policy]`-decorated classes and `[RequirePolicy]`-decorated request types, the generator emits two artifacts under the `ZeroAlloc.Authorization.Generated` namespace:
 
-1. **Resolve `[Authorize("Name")]`** annotations on dispatch targets (methods, request handlers, tool-call signatures). Whether resolution happens at compile time (source generator) or runtime (reflection on first call) is the host's choice.
-2. **Discover `[AuthorizationPolicy("Name")]`-attributed classes** and build a `name → factory` registry so a `[Authorize("AdminOnly")]` reference can be resolved to a callable policy instance. Discovery strategies vary — assembly walks, source generators, hand-registration are all valid.
-3. **Construct an `ISecurityContext`** (or a host-specific subinterface) per call from whatever caller-identity material the host has — HTTP request, gRPC metadata, tool-call invocation, mediator request, etc.
-4. **Invoke `EvaluateAsync(ctx, ct)`** (or one of the simpler entry points) and translate the resulting `UnitResult<AuthorizationFailure>` into the host's outcome — HTTP response, typed exception, log entry, structured tool-call refusal.
+1. **One `AuthorizerFor<TRequest>` subclass per `[RequirePolicy]`-decorated type.** Each subclass resolves the named `[Policy]` classes from DI, calls their `EvaluateAsync` in declaration order, and returns the first failure. All policies must allow before the dispatcher returns `Success()` (conjunction).
+2. **`AddZeroAllocAuthorization()` extension on `IServiceCollection`.** Registers every `[Policy]` class as scoped and every emitted `AuthorizerFor<T>` as scoped.
 
-The contract package itself does **none** of this. There is no scanner, no DI extension, no dispatcher. The five contract types simply carry names and define the policy shape.
+Five diagnostics fire at compile time if the consumer's wiring is broken — `ZAUTH001` (unknown policy name), `ZAUTH002` (duplicate policy name), `ZAUTH003` (policy class doesn't implement `IAuthorizationPolicy`), `ZAUTH004` (abstract/static policy class), `ZAUTH005` (`[RequirePolicy]` on a non-class/non-struct target). The host inherits these as a compile-time safety net — wiring mistakes never reach runtime.
+
+---
+
+## Host startup
+
+One line:
+
+```csharp
+using ZeroAlloc.Authorization.Generated;
+
+builder.Services.AddZeroAllocAuthorization();
+```
+
+That registers every `[Policy]` class discovered in the consumer's compilation plus every emitted `AuthorizerFor<T>`. If a specific policy needs a non-default lifetime (singleton for pure-CPU, transient for short-lived state), register it explicitly **after** the call:
+
+```csharp
+services.AddZeroAllocAuthorization();
+services.AddSingleton<AdminOnlyPolicy>(); // overrides scoped registration
+```
+
+---
+
+## Host dispatch
+
+For each incoming request, build an `ISecurityContext` (or a host-specific subinterface — see below), resolve `AuthorizerFor<TRequest>` from the DI scope, and call `EvaluateAsync`:
+
+```csharp
+var authorizer = sp.GetService<AuthorizerFor<TRequest>>();
+if (authorizer is not null)
+{
+    var result = await authorizer.EvaluateAsync(securityContext, ct);
+    if (result.IsFailure)
+    {
+        // host translates result.Error.Code / Reason into HTTP 403 or equivalent
+        return Forbid(result.Error);
+    }
+}
+
+// no AuthorizerFor<TRequest> registered → request has no policies → proceed
+```
+
+The `GetService<>` (not `GetRequiredService<>`) call is deliberate. A request type with no `[RequirePolicy]` attributes has no emitted dispatcher and no registration; the host treats `null` as "no policies for this request" and proceeds. If your host's policy is that every request type *must* have an authorizer, use `GetRequiredService<>` and let the missing registration throw.
 
 ---
 
@@ -42,19 +82,20 @@ public interface IToolCallSecurityContext : ISecurityContext
 The host populates the subinterface when constructing the per-call context, then passes it as `ISecurityContext` to the policy. The policy downcasts inside the body when it cares:
 
 ```csharp
-[AuthorizationPolicy("NoDestructiveTools")]
+[Policy("NoDestructiveTools")]
 public sealed class NoDestructiveToolsPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx)
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
     {
         if (ctx is IToolCallSecurityContext tc && tc.ToolName == "delete_database")
-            return false;
-        return true;
+            return new(new AuthorizationFailure("tool.destructive", "destructive tool blocked"));
+        return new(UnitResult<AuthorizationFailure>.Success());
     }
 }
 ```
 
-**ZeroAlloc.Mediator.Authorization (planned) — request-scoped host:**
+**ZeroAlloc.Mediator.Authorization v5 — request-scoped host:**
 
 ```csharp
 public interface IRequestSecurityContext<TRequest> : ISecurityContext
@@ -69,12 +110,12 @@ Same pattern — the host wraps the live request in the typed subinterface, the 
 
 ## Mapping `AuthorizationFailure.Code` to outcomes
 
-The whole point of `Evaluate` returning a coded failure is that hosts switch on `Code` to produce structured responses. Each host translates differently.
+The whole point of `EvaluateAsync` returning a coded failure is that hosts switch on `Code` to produce structured responses. Each host translates differently.
 
 **HTTP host — switch to a status:**
 
 ```csharp
-var result = await policy.EvaluateAsync(ctx, ct);
+var result = await authorizer.EvaluateAsync(ctx, ct);
 if (result.IsSuccess) return Results.Ok(payload);
 
 return result.Error.Code switch
@@ -89,7 +130,7 @@ return result.Error.Code switch
 **Mediator host — convert to a result type:**
 
 ```csharp
-var result = await policy.EvaluateAsync(ctx, ct);
+var result = await authorizer.EvaluateAsync(ctx, ct);
 if (result.IsSuccess) return await next(request, ct);
 
 // Either bubble as a typed Result<T, AuthorizationFailure>...
@@ -102,7 +143,7 @@ throw new UnauthorizedException(result.Error.Code, result.Error.Reason);
 **Tool-call host — refuse and emit a structured rejection:**
 
 ```csharp
-var result = await policy.EvaluateAsync(ctx, ct);
+var result = await authorizer.EvaluateAsync(ctx, ct);
 if (!result.IsSuccess)
 {
     return new ToolCallRejection(
@@ -118,13 +159,13 @@ For full deny-code conventions and the `AuthorizationFailure` shape, see [failur
 
 ---
 
-## What the contract package does NOT do
+## Migrating a v1 host
 
-This is worth stating explicitly because it shapes every host integration:
+If you previously wrote your own assembly scanner + `Dictionary<string, IAuthorizationPolicy>` registry to power dispatch, delete it. The generator owns that work now. Concrete migration steps for a host:
 
-- **No scanning.** The package never looks at your assemblies. Hosts walk `[AuthorizationPolicy]`-attributed types themselves.
-- **No DI registration.** There is no `AddZeroAllocAuthorization()` extension method. Hosts decide the lifetime (singleton / scoped / transient) and add policies to whichever container they target.
-- **No dispatch.** Nothing calls `IsAuthorized` for you. The host's pipeline (request handler, tool-call broker, HTTP middleware) is where invocation lives.
-- **No combinator semantics.** When multiple `[Authorize]` attributes stack on a single method, the contract is silent on whether they're AND or OR — every existing host treats them as AND, but that is host policy, not contract.
+1. Delete your `*.Generator` project (or the equivalent reflection-based discovery code).
+2. Replace `Dictionary<string, IAuthorizationPolicy>` lookups with `sp.GetService<AuthorizerFor<TRequest>>()`.
+3. Drop any `[ModuleInitializer]` wiring you had registering policies at process startup — `AddZeroAllocAuthorization()` handles it through DI generic dispatch.
+4. Replace `[Authorize("Name")]` references on method targets with `[RequirePolicy("Name")]` on the containing request type.
 
-If you need an integration that does not yet exist, write a host. The contract is small on purpose so the same five types can be reused across HTTP, mediator, tool-call, gRPC, and any other dispatch surface without one host's assumptions leaking into another.
+`ZeroAlloc.Mediator.Authorization` shipped its v5 against this contract — its old generator was deleted (~150 LOC including hooks + tests) and the runtime `AuthorizationBehavior` migrated to consume `AuthorizerFor<TRequest>` from DI generic dispatch directly.

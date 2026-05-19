@@ -6,89 +6,71 @@ sidebar_position: 2
 
 # Policies
 
-`IAuthorizationPolicy` is the rule a host evaluates before dispatch. The interface exposes four entry points; one is required, three are default-implemented overrides for richer scenarios.
+`IAuthorizationPolicy` is the rule a host evaluates before dispatch. v2 collapsed the interface to a **single async method** — every policy implements `EvaluateAsync` and nothing else.
 
 ```csharp
 public interface IAuthorizationPolicy
 {
-    bool IsAuthorized(ISecurityContext ctx);
-
-    ValueTask<bool> IsAuthorizedAsync(ISecurityContext ctx, CancellationToken ct = default)
-        => ValueTask.FromResult(IsAuthorized(ctx));
-
-    UnitResult<AuthorizationFailure> Evaluate(ISecurityContext ctx)
-        => IsAuthorized(ctx)
-            ? UnitResult<AuthorizationFailure>.Success()
-            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode);
-
     ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
         ISecurityContext ctx, CancellationToken ct = default);
 }
 ```
 
-`IsAuthorized` is the only method without a default implementation — every policy must provide it. Override the others to opt into async dispatch or structured deny information. See [sync vs async](sync-vs-async.md) and [failure shape](failure-shape.md) for the longer story.
+That's the whole contract. No sync vs async choice, no four-method matrix, no boolean shortcut. Every entry point returns a `UnitResult<AuthorizationFailure>` so hosts always have a machine-readable code on deny.
 
 ---
 
-## When to override which
+## Sync-completing policies
 
-| Scenario | Override |
-|---|---|
-| Pure-CPU check, no I/O | `IsAuthorized` only — every other method delegates to it. |
-| I/O-bound check (DB, HTTP, external claims) | `IsAuthorizedAsync`. Throw from `IsAuthorized` if the host calls it. |
-| Sync check that wants a richer deny code/reason | `Evaluate`, returning `UnitResult<AuthorizationFailure>`. |
-| Both I/O-bound and structured deny info | `EvaluateAsync`. |
-
-The default implementations of `IsAuthorizedAsync`, `Evaluate`, and `EvaluateAsync` all funnel back to `IsAuthorized`. If your check is purely synchronous, just override `IsAuthorized` and let the rest fall through — you stay zero-allocation on every entry point because `ValueTask.FromResult` does not heap-allocate and the structured-result wrapper unboxes a `UnitResult<AuthorizationFailure>` value.
-
----
-
-## Sync-only example
+A check that touches nothing but the context itself (role membership, claim lookup, simple predicate) is naturally synchronous. Return the result as a completed `ValueTask` — both `UnitResult<AuthorizationFailure>` and `AuthorizationFailure` are value types, so the entire happy path stays on the stack:
 
 ```csharp
-[AuthorizationPolicy("AdminOnly")]
+[Policy("AdminOnly")]
 public sealed class AdminOnlyPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+        => new(ctx.Roles.Contains("Admin")
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode, "Admin role required"));
 }
 ```
 
-Any host can dispatch this synchronously or via the async wrapper — the default `IsAuthorizedAsync` returns `ValueTask.FromResult(IsAuthorized(ctx))` with no allocation.
+The `new(...)` constructor wraps the synchronous result in a `ValueTask<UnitResult<AuthorizationFailure>>` without allocating a `Task`. This is the idiom for every CPU-bound policy.
 
-## I/O-bound example
+---
 
-For checks that fundamentally cannot run synchronously (tenant validation, external claims service), override `IsAuthorizedAsync` and have `IsAuthorized` throw `InvalidOperationException`. Hosts that can dispatch async will call the async overload; hosts that cannot should treat the throw as a deny, not as a fault:
+## I/O-bound policies
+
+A check that genuinely needs to await something (DB lookup, HTTP call, external claims service) marks `EvaluateAsync` as `async` and awaits inside:
 
 ```csharp
-[AuthorizationPolicy("ActiveTenant")]
+[Policy("ActiveTenant")]
 public sealed class ActiveTenantPolicy(ITenantService tenants) : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) =>
-        throw new InvalidOperationException("Use async — tenant lookup is I/O-bound.");
-
-    public async ValueTask<bool> IsAuthorizedAsync(
+    public async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
         ISecurityContext ctx, CancellationToken ct = default)
-        => await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+    {
+        var active = await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+        return active
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure("tenant.inactive", "tenant is suspended");
+    }
 }
 ```
 
-This pattern — sync throws, async does the work — is the convention used by the README's `TenantPolicy` example and by the planned Mediator.Authorization handlers.
+The first `await` of a non-completed task allocates the state machine — that cost lives in your I/O, not in the dispatcher. The dispatch layer itself stays zero-allocation.
 
-## Structured-deny example
+---
 
-When a host wants to map deny reasons to API responses, return a richer `UnitResult<AuthorizationFailure>` instead of a `bool`:
+## Structured deny
+
+`AuthorizationFailure` carries a machine-readable `Code` and an optional human-readable `Reason`. Use specific codes for cases the host needs to distinguish:
 
 ```csharp
-[AuthorizationPolicy("AdminOnly")]
-public sealed class AdminOnlyPolicy : IAuthorizationPolicy
-{
-    public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
-
-    public UnitResult<AuthorizationFailure> Evaluate(ISecurityContext ctx)
-        => ctx.Roles.Contains("Admin")
-            ? UnitResult<AuthorizationFailure>.Success()
-            : new AuthorizationFailure("policy.deny.role", "user is not Admin");
-}
+return new AuthorizationFailure("policy.deny.role", "user is not Admin");
+return new AuthorizationFailure("tenant.inactive", "tenant is suspended");
+return new AuthorizationFailure("scope.missing", "token lacks 'admin:write'");
 ```
 
 See [failure shape](failure-shape.md) for the full deny-code conventions.
@@ -97,19 +79,20 @@ See [failure shape](failure-shape.md) for the full deny-code conventions.
 
 ## Lifetime and DI
 
-The contract package does not register policies. Hosts do — they walk `[AuthorizationPolicy]`-attributed types (see [attributes](../attributes.md)) and add them to their own DI container. Each host decides the scope:
+The bundled source generator registers every `[Policy]`-decorated class **as scoped** via the emitted `AddZeroAllocAuthorization()` extension. Scoped fits the common case: policies can depend on scoped services (DbContext, current-tenant accessor, the HTTP request's claims principal) without lifetime mismatches.
 
-- **Singleton** — pure-CPU policies with no per-request state.
-- **Scoped** — policies that depend on scoped services (DbContext, current-tenant accessor).
-- **Transient** — rarely needed; useful when a policy holds short-lived state across a single evaluation.
+If you need a different lifetime for a specific policy — singleton for a pure-CPU rule, transient for short-lived state — register it explicitly **after** calling `AddZeroAllocAuthorization()` so your registration wins:
 
-A host that supports DI typically resolves the policy from the container at dispatch time, after looking up the registered type by name. The contract is type-only — no construction, no scoping decisions live here.
+```csharp
+services.AddZeroAllocAuthorization();
+services.AddSingleton<AdminOnlyPolicy>(); // overrides the generator's scoped registration
+```
 
 ---
 
 ## See also
 
-- [Sync vs async](sync-vs-async.md) — when each evaluation entry point matters.
+- [Sync vs async](sync-vs-async.md) — the async-only contract note and the `new ValueTask<...>(syncResult)` idiom.
 - [Failure shape](failure-shape.md) — `AuthorizationFailure` and `UnitResult<AuthorizationFailure>`.
-- [Authorize attribute](authorize-attribute.md) — how a policy is bound to a method.
-- [Security context](security-context.md) — what flows into `IsAuthorized`.
+- [RequirePolicy attribute](require-policy-attribute.md) — how a policy is bound to a request type.
+- [Security context](security-context.md) — what flows into `EvaluateAsync`.

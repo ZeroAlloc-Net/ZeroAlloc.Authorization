@@ -85,10 +85,16 @@ internal static class PolicySymbolWalker
         }
 
         var instantiable = !type.IsAbstract && !type.IsStatic;
-        sink.Add(new PolicyInfo(
-            name,
-            type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-            instantiable));
+        var fqn = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (!instantiable)
+        {
+            // ZAUTH004: [Policy] class is abstract/static — DI cannot construct it.
+            diagnostics.Add(Diagnostic.Create(
+                Descriptors.PolicyNotInstantiable,
+                Location.None,
+                fqn));
+        }
+        sink.Add(new PolicyInfo(name, fqn, instantiable));
     }
 
     private static bool ImplementsInterface(INamedTypeSymbol type, INamedTypeSymbol iface)

@@ -61,6 +61,40 @@ public sealed class AdminPolicy
     }
 
     [Fact]
+    public void ZAUTH004_AbstractPolicy_FiresError()
+    {
+        var source = @"
+using ZeroAlloc.Authorization;
+namespace MyApp;
+
+[Policy(""admin"")]
+public abstract class AdminPolicy : IAuthorizationPolicy
+{
+    public bool IsAuthorized(ISecurityContext ctx) => true;
+}
+";
+        var diagnostics = RunGenerator(source);
+        Assert.Contains(diagnostics, d => d.Id == "ZAUTH004" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void ZAUTH004_ConcretePolicy_DoesNotFire()
+    {
+        var source = @"
+using ZeroAlloc.Authorization;
+namespace MyApp;
+
+[Policy(""admin"")]
+public sealed class AdminPolicy : IAuthorizationPolicy
+{
+    public bool IsAuthorized(ISecurityContext ctx) => true;
+}
+";
+        var diagnostics = RunGenerator(source);
+        Assert.DoesNotContain(diagnostics, d => d.Id == "ZAUTH004");
+    }
+
+    [Fact]
     public void ZAUTH003_PolicyImplementsInterface_DoesNotFire()
     {
         var source = @"

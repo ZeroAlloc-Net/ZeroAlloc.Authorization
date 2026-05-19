@@ -30,4 +30,13 @@ internal static class Descriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor PolicyNotInstantiable = new(
+        id: "ZAUTH004",
+        title: "[Policy] class cannot be instantiated by DI",
+        // RS1032 forbids single-sentence message with trailing period.
+        messageFormat: "'{0}' is decorated with [Policy] but is abstract — DI cannot instantiate it",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

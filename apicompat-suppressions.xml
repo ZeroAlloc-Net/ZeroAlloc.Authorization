@@ -2,7 +2,7 @@
 <!--
   ZA.Authorization v2.0.0 — intentional API breaks as part of the major version bump.
 
-  Five breakages are suppressed:
+  Five breakages are suppressed, each across three TFMs (net8.0, net9.0, net10.0):
   - Two type removals: the v1 [AuthorizationPolicy] and [Authorize] attributes,
     renamed to [Policy] and [RequirePolicy] respectively. The rename eliminates
     the name collision with Microsoft.AspNetCore.Authorization.AuthorizeAttribute
@@ -11,33 +11,142 @@
     to a single async EvaluateAsync (the surviving method). Sync-only policies
     wrap their result in new ValueTask<...>(result) — allocation-free on the stack.
 
+  Each entry sets IsBaselineSuppression=true because the api-compat workflow
+  compares the newly built nupkg against the latest released baseline (1.2.x).
+
   See docs/plans/2026-05-19-policy-registry-generator-design.md for the design
   decisions that led to these breaks.
 -->
 <Suppressions>
+
+  <!-- CP0001: AuthorizationPolicyAttribute removal (renamed to PolicyAttribute) -->
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:ZeroAlloc.Authorization.AuthorizationPolicyAttribute</Target>
+    <Left>lib/net8.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net8.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
     <Justification>Renamed to [Policy] in v2.0.0 — intentional breaking change for the major version bump.</Justification>
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:ZeroAlloc.Authorization.AuthorizationPolicyAttribute</Target>
+    <Left>lib/net9.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net9.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>Renamed to [Policy] in v2.0.0 — intentional breaking change for the major version bump.</Justification>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:ZeroAlloc.Authorization.AuthorizationPolicyAttribute</Target>
+    <Left>lib/net10.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net10.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>Renamed to [Policy] in v2.0.0 — intentional breaking change for the major version bump.</Justification>
+  </Suppression>
+
+  <!-- CP0001: AuthorizeAttribute removal (renamed to RequirePolicyAttribute) -->
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:ZeroAlloc.Authorization.AuthorizeAttribute</Target>
+    <Left>lib/net8.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net8.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
     <Justification>Renamed to [RequirePolicy] in v2.0.0 to eliminate name collision with Microsoft.AspNetCore.Authorization.AuthorizeAttribute. Intentional breaking change for the major version bump.</Justification>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:ZeroAlloc.Authorization.AuthorizeAttribute</Target>
+    <Left>lib/net9.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net9.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>Renamed to [RequirePolicy] in v2.0.0 to eliminate name collision with Microsoft.AspNetCore.Authorization.AuthorizeAttribute. Intentional breaking change for the major version bump.</Justification>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:ZeroAlloc.Authorization.AuthorizeAttribute</Target>
+    <Left>lib/net10.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net10.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>Renamed to [RequirePolicy] in v2.0.0 to eliminate name collision with Microsoft.AspNetCore.Authorization.AuthorizeAttribute. Intentional breaking change for the major version bump.</Justification>
+  </Suppression>
+
+  <!-- CP0002: IAuthorizationPolicy.IsAuthorized(ISecurityContext) -> bool -->
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:ZeroAlloc.Authorization.IAuthorizationPolicy.IsAuthorized(ZeroAlloc.Authorization.ISecurityContext)</Target>
+    <Left>lib/net8.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net8.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0.</Justification>
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:ZeroAlloc.Authorization.IAuthorizationPolicy.IsAuthorized(ZeroAlloc.Authorization.ISecurityContext)</Target>
-    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0. Sync-only policies wrap their result in new ValueTask&lt;...&gt;(result) — allocation-free. Intentional breaking change for the major version bump.</Justification>
+    <Left>lib/net9.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net9.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0.</Justification>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:ZeroAlloc.Authorization.IAuthorizationPolicy.IsAuthorized(ZeroAlloc.Authorization.ISecurityContext)</Target>
+    <Left>lib/net10.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net10.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0.</Justification>
+  </Suppression>
+
+  <!-- CP0002: IAuthorizationPolicy.IsAuthorizedAsync(ISecurityContext, CancellationToken) -> ValueTask<bool> -->
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:ZeroAlloc.Authorization.IAuthorizationPolicy.IsAuthorizedAsync(ZeroAlloc.Authorization.ISecurityContext,System.Threading.CancellationToken)</Target>
+    <Left>lib/net8.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net8.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0.</Justification>
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:ZeroAlloc.Authorization.IAuthorizationPolicy.IsAuthorizedAsync(ZeroAlloc.Authorization.ISecurityContext,System.Threading.CancellationToken)</Target>
-    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0. Intentional breaking change for the major version bump.</Justification>
+    <Left>lib/net9.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net9.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0.</Justification>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:ZeroAlloc.Authorization.IAuthorizationPolicy.IsAuthorizedAsync(ZeroAlloc.Authorization.ISecurityContext,System.Threading.CancellationToken)</Target>
+    <Left>lib/net10.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net10.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0.</Justification>
+  </Suppression>
+
+  <!-- CP0002: IAuthorizationPolicy.Evaluate(ISecurityContext) -> UnitResult<AuthorizationFailure> -->
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:ZeroAlloc.Authorization.IAuthorizationPolicy.Evaluate(ZeroAlloc.Authorization.ISecurityContext)</Target>
+    <Left>lib/net8.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net8.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0.</Justification>
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:ZeroAlloc.Authorization.IAuthorizationPolicy.Evaluate(ZeroAlloc.Authorization.ISecurityContext)</Target>
-    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0. Sync-callers migrate to EvaluateAsync and ValueTask wrapping. Intentional breaking change for the major version bump.</Justification>
+    <Left>lib/net9.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net9.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0.</Justification>
   </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:ZeroAlloc.Authorization.IAuthorizationPolicy.Evaluate(ZeroAlloc.Authorization.ISecurityContext)</Target>
+    <Left>lib/net10.0/ZeroAlloc.Authorization.dll</Left>
+    <Right>lib/net10.0/ZeroAlloc.Authorization.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+    <Justification>IAuthorizationPolicy reduced to single EvaluateAsync method in v2.0.0.</Justification>
+  </Suppression>
+
 </Suppressions>

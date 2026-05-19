@@ -39,4 +39,13 @@ internal static class Descriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor RequirePolicyInvalidTarget = new(
+        id: "ZAUTH005",
+        title: "[RequirePolicy] applied to unsupported type kind",
+        // RS1032: phrased as 'X. Y.' multi-sentence with trailing period.
+        messageFormat: "[RequirePolicy] can only be applied to classes, structs, or records. '{0}' is {1}.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

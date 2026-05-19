@@ -24,7 +24,12 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         {
             spc.ReportDiagnostic(policyResult.Diagnostics[i]);
         }
-        var requires = RequireSymbolWalker.Find(compilation);
+        var requireResult = RequireSymbolWalker.Find(compilation);
+        var requires = requireResult.Requires;
+        for (int i = 0; i < requireResult.Diagnostics.Count; i++)
+        {
+            spc.ReportDiagnostic(requireResult.Diagnostics[i]);
+        }
         if (policies.Count == 0 && requires.Count == 0) return;
 
         // ZAUTH002: detect duplicate [Policy] names before building byName.

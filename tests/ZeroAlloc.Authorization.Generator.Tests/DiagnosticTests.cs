@@ -78,6 +78,31 @@ public abstract class AdminPolicy : IAuthorizationPolicy
     }
 
     [Fact]
+    public void ZAUTH005_ValidTargets_DoesNotFire()
+    {
+        // ZAUTH005 is defensive; the attribute itself restricts targets to class/struct
+        // via AttributeTargets — so we can only verify clean source does not fire.
+        var source = @"
+using ZeroAlloc.Authorization;
+namespace MyApp;
+
+[Policy(""admin"")]
+public sealed class AdminPolicy : IAuthorizationPolicy
+{
+    public bool IsAuthorized(ISecurityContext ctx) => true;
+}
+
+[RequirePolicy(""admin"")]
+public sealed record Foo(int Id);
+
+[RequirePolicy(""admin"")]
+public struct Bar { public int Id; }
+";
+        var diagnostics = RunGenerator(source);
+        Assert.DoesNotContain(diagnostics, d => d.Id == "ZAUTH005");
+    }
+
+    [Fact]
     public void ZAUTH004_ConcretePolicy_DoesNotFire()
     {
         var source = @"

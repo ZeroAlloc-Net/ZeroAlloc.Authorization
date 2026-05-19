@@ -6,91 +6,116 @@ sidebar_position: 1
 
 # Writing a Policy
 
-A policy is one class that implements `IAuthorizationPolicy`, decorated with `[AuthorizationPolicy("Name")]` so a host can find it. There are three shapes — pure-CPU, I/O-bound, structured-deny — and one decoration rule. This guide walks each shape end-to-end.
+A policy is one class that implements `IAuthorizationPolicy`, decorated with `[Policy("Name")]` so the bundled source generator can find it. The interface is a single method — `EvaluateAsync` — and every policy returns a structured `UnitResult<AuthorizationFailure>`.
 
 See also: [policies](../core-concepts/policies.md), [sync vs async](../core-concepts/sync-vs-async.md), [failure shape](../core-concepts/failure-shape.md), [attributes](../attributes.md).
 
 ---
 
-## Pure CPU — override `IsAuthorized` only
+## CPU-bound — return a completed `ValueTask`
 
-A check that touches nothing but the context itself (role membership, claim lookup, simple predicate) overrides `IsAuthorized` and lets every other entry point fall through to it:
+A check that touches nothing but the context itself (role membership, claim lookup, simple predicate) is naturally synchronous. Wrap the result in `new ValueTask<...>(syncResult)` — the value-typed `UnitResult<AuthorizationFailure>` keeps the happy path allocation-free:
 
 ```csharp
 using ZeroAlloc.Authorization;
+using ZeroAlloc.Results;
 
-[AuthorizationPolicy("AdminOnly")]
+[Policy("AdminOnly")]
 public sealed class AdminOnlyPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
-}
-```
-
-The default `IsAuthorizedAsync` wraps this in `ValueTask.FromResult` (no allocation). The default `Evaluate` returns `UnitResult<AuthorizationFailure>.Success()` or a `default` failure with `Code == "policy.deny"`. Hosts that dispatch via any of the four entry points reach the same body.
-
----
-
-## I/O-bound — override `IsAuthorizedAsync`
-
-A check that fundamentally cannot run synchronously (DB lookup, HTTP call, external claims service) overrides the async overload and throws from the sync path:
-
-```csharp
-[AuthorizationPolicy("ActiveTenant")]
-public sealed class TenantPolicy(ITenantService tenants) : IAuthorizationPolicy
-{
-    public bool IsAuthorized(ISecurityContext ctx) =>
-        throw new InvalidOperationException("Use async — tenant lookup is I/O-bound.");
-
-    public async ValueTask<bool> IsAuthorizedAsync(
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
         ISecurityContext ctx, CancellationToken ct = default)
-        => await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+        => new(ctx.Roles.Contains("Admin")
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode, "Admin role required"));
 }
 ```
 
-The throw is the explicit signal: a host that called the sync path either has the wrong dispatcher, or it should treat the throw as a deny. Either way, the policy author surfaces the constraint loudly rather than fabricating a fake answer.
+---
+
+## I/O-bound — `async` + `await`
+
+A check that fundamentally needs to await something (DB lookup, HTTP call, external claims service) marks `EvaluateAsync` as `async`:
+
+```csharp
+[Policy("ActiveTenant")]
+public sealed class ActiveTenantPolicy(ITenantService tenants) : IAuthorizationPolicy
+{
+    public async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+    {
+        var active = await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
+        return active
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure("tenant.inactive", "tenant is suspended");
+    }
+}
+```
+
+The first `await` on a non-completed task allocates the state machine — that cost lives in your I/O, not in the contract. The dispatch layer itself stays zero-allocation.
 
 ---
 
-## Structured deny — override `Evaluate`
+## Structured deny — emit a coded `AuthorizationFailure`
 
-When a host needs to map deny reasons to API responses (HTTP status, log tag, telemetry counter), override `Evaluate` and return a coded `AuthorizationFailure` instead of a bare `bool`:
+When a host needs to map deny reasons to API responses (HTTP status, log tag, telemetry counter), emit a specific `Code` instead of `DefaultDenyCode`:
 
 ```csharp
-[AuthorizationPolicy("AdminOnly")]
+[Policy("AdminOnly")]
 public sealed class RichDenyPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx) => ctx.Roles.Contains("Admin");
-
-    public UnitResult<AuthorizationFailure> Evaluate(ISecurityContext ctx)
-        => ctx.Roles.Contains("Admin")
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+        => new(ctx.Roles.Contains("Admin")
             ? UnitResult<AuthorizationFailure>.Success()
-            : new AuthorizationFailure("policy.deny.role", "user is not Admin");
+            : new AuthorizationFailure("policy.deny.role", "user is not Admin"));
 }
 ```
 
-A host that calls `Evaluate` reads `result.Error.Code == "policy.deny.role"` and translates it. A host that only calls `IsAuthorized` still gets a correct deny — just without the code/reason. See [failure shape](../core-concepts/failure-shape.md) for the full deny-code conventions.
-
-For a check that is both I/O-bound and emits coded denies, override `EvaluateAsync` directly.
+A host that reads `result.Error.Code == "policy.deny.role"` can translate it to a 403 with a structured body. See [failure shape](../core-concepts/failure-shape.md) for the full deny-code conventions.
 
 ---
 
 ## Decoration
 
-The `[AuthorizationPolicy("Name")]` attribute is what makes a class discoverable to a host:
+The `[Policy("Name")]` attribute is what makes a class discoverable to the generator:
 
 ```csharp
-[AuthorizationPolicy("AdminOnly")]
+[Policy("AdminOnly")]
 public sealed class AdminOnlyPolicy : IAuthorizationPolicy { /* ... */ }
 ```
 
-The string is the registration name — hosts use it to map `[Authorize("AdminOnly")]` references back to this class. One name per class, and derived classes do not inherit the registration; if a subclass is its own policy it must declare its own `[AuthorizationPolicy("...")]`. See [attributes](../attributes.md) for the full property table.
+The string is the registration name — the generator uses it to map `[RequirePolicy("AdminOnly")]` references back to this class. One name per class, and derived classes do not inherit the registration; if a subclass is its own policy it must declare its own `[Policy("...")]`. See [attributes](../attributes.md) for the full property table.
+
+A `[Policy]` class must implement `IAuthorizationPolicy` (`ZAUTH003` fires otherwise). It must be instantiable — abstract or static classes fire `ZAUTH004`. Two `[Policy("X")]` declarations with the same name fire `ZAUTH002`.
+
+---
+
+## Binding to a request
+
+`[RequirePolicy]` lives on the request type (class or struct), not on the method:
+
+```csharp
+[RequirePolicy("AdminOnly")]
+public sealed record DeleteUserCommand(string UserId);
+```
+
+Stack the attribute to require multiple policies (all must pass):
+
+```csharp
+[RequirePolicy("ActiveTenant")]
+[RequirePolicy("AdminOnly")]
+public sealed record PurgeTenantCommand(string TenantId);
+```
+
+Placing `[RequirePolicy]` on a method (or interface, delegate, primitive) fires `ZAUTH005` at compile time. The v2 model is one set of policy requirements per request, not per method.
 
 ---
 
 ## Anti-patterns to avoid
 
-**Don't capture per-evaluation state on the policy class.** Most hosts register policies as singletons. Instance fields on the policy are shared across every concurrent evaluation — a `_lastUserId` field will race. Per-evaluation state belongs in `ISecurityContext` (or in a host-specific subinterface; see [security-context](../core-concepts/security-context.md)) or in injected per-request services. Constructor-injected dependencies are fine if the host registers them with the right lifetime.
+**Don't capture per-evaluation state on the policy class.** Policies are registered as scoped by default — but `[Policy]` classes can still be reused across awaits within a single request. Instance fields on the policy are shared across every concurrent caller into the scope — a `_lastUserId` field will race. Per-evaluation state belongs in `ISecurityContext` (or in a host-specific subinterface; see [security-context](../core-concepts/security-context.md)) or in injected per-request services.
 
-**Don't `Task.Run` from a sync `IsAuthorized` to fake async.** Offloading I/O onto a thread-pool thread strictly worsens the situation: it allocates a `Task`, blocks one pool thread, and still synchronously waits. If the check is genuinely I/O-bound, throw from `IsAuthorized` and override `IsAuthorizedAsync`. Let the host call the right overload (or treat the throw as a deny if it cannot).
+**Don't `Task.Run` from inside `EvaluateAsync` to fake parallelism.** If you need to await I/O, just await it; the `ValueTask` shape handles sync-completing and async-completing paths uniformly. Offloading onto the thread pool allocates and blocks for no benefit.
 
-**Don't return `false` for "policy doesn't apply."** Deny means deny. If a policy decides it has nothing to say about a particular call, that's the host's problem to solve at registration time — the host should select a different policy, or none at all. A policy that returns `true` whenever it doesn't apply turns into an accidental allow-list; a policy that returns `false` when it doesn't apply blocks unrelated calls. Both are bugs. The contract is binary: a policy's body answers "should this call proceed under this rule?" and nothing else.
+**Don't return `Success()` for "policy doesn't apply."** Deny means deny; success means proceed. If a policy decides it has nothing to say about a particular call, that's the consumer's problem to solve by not attaching `[RequirePolicy]` to that request type. A policy that returns success whenever it doesn't apply turns into an accidental allow-list. The contract is binary: a policy's body answers "should this call proceed under this rule?" and nothing else.

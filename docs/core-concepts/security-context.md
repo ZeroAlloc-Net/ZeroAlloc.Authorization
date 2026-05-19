@@ -43,7 +43,7 @@ public interface IToolCallSecurityContext : ISecurityContext
     IReadOnlyDictionary<string, object?> Args { get; }
 }
 
-// Planned Mediator.Authorization pattern: request-scoped host
+// ZeroAlloc.Mediator.Authorization v5 pattern: request-scoped host
 public interface IRequestSecurityContext<TRequest> : ISecurityContext
 {
     TRequest Request { get; }
@@ -53,16 +53,17 @@ public interface IRequestSecurityContext<TRequest> : ISecurityContext
 A policy that wants to inspect those fields downcasts:
 
 ```csharp
-[AuthorizationPolicy("NoDestructiveTools")]
+[Policy("NoDestructiveTools")]
 public sealed class NoDestructiveToolsPolicy : IAuthorizationPolicy
 {
-    public bool IsAuthorized(ISecurityContext ctx)
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
     {
-        if (ctx is IToolCallSecurityContext tc)
-            return tc.ToolName != "delete_database";
+        if (ctx is IToolCallSecurityContext tc && tc.ToolName == "delete_database")
+            return new(new AuthorizationFailure("tool.destructive", "destructive tool blocked"));
 
         // Generic ISecurityContext — nothing tool-specific to check.
-        return true;
+        return new(UnitResult<AuthorizationFailure>.Success());
     }
 }
 ```
@@ -90,9 +91,11 @@ public sealed class AnonymousSecurityContext : ISecurityContext
 Reference-equality with `Instance` is the cheapest way for a policy to reject anonymous callers:
 
 ```csharp
-public bool IsAuthorized(ISecurityContext ctx)
-    => !ReferenceEquals(ctx, AnonymousSecurityContext.Instance)
-       && ctx.Roles.Contains("Admin");
+public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+    ISecurityContext ctx, CancellationToken ct = default)
+    => new(!ReferenceEquals(ctx, AnonymousSecurityContext.Instance) && ctx.Roles.Contains("Admin")
+        ? UnitResult<AuthorizationFailure>.Success()
+        : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode, "Admin role required"));
 ```
 
 The `Roles` and `Claims` collections on the singleton are `FrozenSet<string>.Empty` and `FrozenDictionary<string, string>.Empty` — shared, allocation-free.
@@ -104,5 +107,5 @@ The `Roles` and `Claims` collections on the singleton are `FrozenSet<string>.Emp
 ## See also
 
 - [Policies](policies.md) — how `IAuthorizationPolicy` consumes a context.
-- [Authorize attribute](authorize-attribute.md) — how policy bindings are declared.
+- [RequirePolicy attribute](require-policy-attribute.md) — how policy bindings are declared.
 - [Getting started](../getting-started.md) — end-to-end first policy.

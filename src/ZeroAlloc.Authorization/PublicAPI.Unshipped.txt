@@ -5,3 +5,6 @@ ZeroAlloc.Authorization.PolicyAttribute.Name.get -> string!
 ZeroAlloc.Authorization.RequirePolicyAttribute
 ZeroAlloc.Authorization.RequirePolicyAttribute.RequirePolicyAttribute(string! policyName) -> void
 ZeroAlloc.Authorization.RequirePolicyAttribute.PolicyName.get -> string!
+ZeroAlloc.Authorization.AuthorizerFor<TRequest>
+ZeroAlloc.Authorization.AuthorizerFor<TRequest>.AuthorizerFor() -> void
+abstract ZeroAlloc.Authorization.AuthorizerFor<TRequest>.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>

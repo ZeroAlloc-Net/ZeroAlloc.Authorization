@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
+using ZeroAlloc.Authorization.Generator.Diagnostics;
 
 namespace ZeroAlloc.Authorization.Generator.Discovery;
 
@@ -8,21 +9,29 @@ internal static class PolicySymbolWalker
     private const string PolicyAttributeFullName = "ZeroAlloc.Authorization.PolicyAttribute";
     private const string AuthorizationPolicyInterfaceFullName = "ZeroAlloc.Authorization.IAuthorizationPolicy";
 
-    public static IReadOnlyList<PolicyInfo> Find(Compilation compilation)
+    public static PolicyWalkResult Find(Compilation compilation)
     {
         var policyAttr = compilation.GetTypeByMetadataName(PolicyAttributeFullName);
-        if (policyAttr is null) return System.Array.Empty<PolicyInfo>();
+        if (policyAttr is null) return new PolicyWalkResult(System.Array.Empty<PolicyInfo>(), System.Array.Empty<Diagnostic>());
+
+        var policyIface = compilation.GetTypeByMetadataName(AuthorizationPolicyInterfaceFullName);
 
         var results = new List<PolicyInfo>();
-        WalkNamespace(compilation.SourceModule.GlobalNamespace, policyAttr, results);
+        var diagnostics = new List<Diagnostic>();
+        WalkNamespace(compilation.SourceModule.GlobalNamespace, policyAttr, policyIface, results, diagnostics);
         foreach (var refAsm in compilation.SourceModule.ReferencedAssemblySymbols)
         {
-            WalkNamespace(refAsm.GlobalNamespace, policyAttr, results);
+            WalkNamespace(refAsm.GlobalNamespace, policyAttr, policyIface, results, diagnostics);
         }
-        return results;
+        return new PolicyWalkResult(results, diagnostics);
     }
 
-    private static void WalkNamespace(INamespaceOrTypeSymbol root, INamedTypeSymbol policyAttr, List<PolicyInfo> sink)
+    private static void WalkNamespace(
+        INamespaceOrTypeSymbol root,
+        INamedTypeSymbol policyAttr,
+        INamedTypeSymbol? policyIface,
+        List<PolicyInfo> sink,
+        List<Diagnostic> diagnostics)
     {
         var stack = new Stack<INamespaceOrTypeSymbol>();
         stack.Push(root);
@@ -38,27 +47,57 @@ internal static class PolicySymbolWalker
                 else if (member is INamedTypeSymbol type)
                 {
                     foreach (var nested in type.GetTypeMembers()) stack.Push(nested);
-
-                    AttributeData? policyAttribute = null;
-                    foreach (var a in type.GetAttributes())
-                    {
-                        if (SymbolEqualityComparer.Default.Equals(a.AttributeClass, policyAttr))
-                        {
-                            policyAttribute = a;
-                            break;
-                        }
-                    }
-                    if (policyAttribute is null) continue;
-                    if (policyAttribute.ConstructorArguments.Length == 0) continue;
-                    var nameArg = policyAttribute.ConstructorArguments[0];
-                    if (nameArg.Value is not string name) continue;
-                    var instantiable = !type.IsAbstract && !type.IsStatic;
-                    sink.Add(new PolicyInfo(
-                        name,
-                        type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                        instantiable));
+                    ProcessType(type, policyAttr, policyIface, sink, diagnostics);
                 }
             }
         }
     }
+
+    private static void ProcessType(
+        INamedTypeSymbol type,
+        INamedTypeSymbol policyAttr,
+        INamedTypeSymbol? policyIface,
+        List<PolicyInfo> sink,
+        List<Diagnostic> diagnostics)
+    {
+        AttributeData? policyAttribute = null;
+        foreach (var a in type.GetAttributes())
+        {
+            if (SymbolEqualityComparer.Default.Equals(a.AttributeClass, policyAttr))
+            {
+                policyAttribute = a;
+                break;
+            }
+        }
+        if (policyAttribute is null) return;
+        if (policyAttribute.ConstructorArguments.Length == 0) return;
+        var nameArg = policyAttribute.ConstructorArguments[0];
+        if (nameArg.Value is not string name) return;
+
+        // ZAUTH003: [Policy] class must implement IAuthorizationPolicy.
+        if (policyIface is not null && !ImplementsInterface(type, policyIface))
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Descriptors.PolicyDoesNotImplementInterface,
+                Location.None,
+                type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+            return;
+        }
+
+        var instantiable = !type.IsAbstract && !type.IsStatic;
+        sink.Add(new PolicyInfo(
+            name,
+            type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            instantiable));
+    }
+
+    private static bool ImplementsInterface(INamedTypeSymbol type, INamedTypeSymbol iface)
+    {
+        foreach (var i in type.AllInterfaces)
+        {
+            if (SymbolEqualityComparer.Default.Equals(i, iface)) return true;
+        }
+        return false;
+    }
 }
+

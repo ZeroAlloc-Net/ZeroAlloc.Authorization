@@ -18,7 +18,12 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
 
     private static void GenerateForCompilation(SourceProductionContext spc, Compilation compilation)
     {
-        var policies = PolicySymbolWalker.Find(compilation);
+        var policyResult = PolicySymbolWalker.Find(compilation);
+        var policies = policyResult.Policies;
+        for (int i = 0; i < policyResult.Diagnostics.Count; i++)
+        {
+            spc.ReportDiagnostic(policyResult.Diagnostics[i]);
+        }
         var requires = RequireSymbolWalker.Find(compilation);
         if (policies.Count == 0 && requires.Count == 0) return;
 

@@ -21,4 +21,13 @@ internal static class Descriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor PolicyDoesNotImplementInterface = new(
+        id: "ZAUTH003",
+        title: "[Policy] class does not implement IAuthorizationPolicy",
+        // RS1032 forbids single-sentence message with trailing period — phrase as 'is X but Y' fragment without period.
+        messageFormat: "'{0}' is decorated with [Policy] but does not implement IAuthorizationPolicy",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

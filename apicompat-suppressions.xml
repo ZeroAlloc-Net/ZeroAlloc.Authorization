@@ -14,7 +14,7 @@
   See docs/plans/2026-05-19-policy-registry-generator-design.md for the design
   decisions that led to these breaks.
 -->
-<Suppressions xmlns="http://www.w3.org/2001/XMLSchema">
+<Suppressions>
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:ZeroAlloc.Authorization.AuthorizationPolicyAttribute</Target>

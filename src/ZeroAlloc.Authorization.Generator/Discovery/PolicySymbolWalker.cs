@@ -14,8 +14,18 @@ internal static class PolicySymbolWalker
         if (policyAttr is null) return System.Array.Empty<PolicyInfo>();
 
         var results = new List<PolicyInfo>();
+        WalkNamespace(compilation.SourceModule.GlobalNamespace, policyAttr, results);
+        foreach (var refAsm in compilation.SourceModule.ReferencedAssemblySymbols)
+        {
+            WalkNamespace(refAsm.GlobalNamespace, policyAttr, results);
+        }
+        return results;
+    }
+
+    private static void WalkNamespace(INamespaceOrTypeSymbol root, INamedTypeSymbol policyAttr, List<PolicyInfo> sink)
+    {
         var stack = new Stack<INamespaceOrTypeSymbol>();
-        stack.Push(compilation.SourceModule.GlobalNamespace);
+        stack.Push(root);
         while (stack.Count > 0)
         {
             var current = stack.Pop();
@@ -43,13 +53,12 @@ internal static class PolicySymbolWalker
                     var nameArg = policyAttribute.ConstructorArguments[0];
                     if (nameArg.Value is not string name) continue;
                     var instantiable = !type.IsAbstract && !type.IsStatic;
-                    results.Add(new PolicyInfo(
+                    sink.Add(new PolicyInfo(
                         name,
                         type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         instantiable));
                 }
             }
         }
-        return results;
     }
 }

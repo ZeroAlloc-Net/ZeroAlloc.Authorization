@@ -14,8 +14,18 @@ internal static class RequireSymbolWalker
         if (requireAttr is null) return System.Array.Empty<RequireInfo>();
 
         var results = new List<RequireInfo>();
+        WalkNamespace(compilation.SourceModule.GlobalNamespace, requireAttr, results);
+        foreach (var refAsm in compilation.SourceModule.ReferencedAssemblySymbols)
+        {
+            WalkNamespace(refAsm.GlobalNamespace, requireAttr, results);
+        }
+        return results;
+    }
+
+    private static void WalkNamespace(INamespaceOrTypeSymbol root, INamedTypeSymbol requireAttr, List<RequireInfo> sink)
+    {
         var stack = new Stack<INamespaceOrTypeSymbol>();
-        stack.Push(compilation.SourceModule.GlobalNamespace);
+        stack.Push(root);
         while (stack.Count > 0)
         {
             var current = stack.Pop();
@@ -45,11 +55,10 @@ internal static class RequireSymbolWalker
                     var unqualified = type.ToDisplayString(new SymbolDisplayFormat(
                         typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces));
                     var safe = SanitizeIdentifier(unqualified);
-                    results.Add(new RequireInfo(fqn, safe, names));
+                    sink.Add(new RequireInfo(fqn, safe, names));
                 }
             }
         }
-        return results;
     }
 
     private static string SanitizeIdentifier(string s)

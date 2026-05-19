@@ -10,7 +10,7 @@
     <PackageProjectUrl>https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization</PackageProjectUrl>
     <RepositoryUrl>https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Description>Authorization primitives for .NET — ISecurityContext, IAuthorizationPolicy, [Authorize] / [AuthorizationPolicy] attributes. Shared by AI.Sentinel and ZeroAlloc.Mediator.Authorization.</Description>
+    <Description>Authorization primitives for .NET — ISecurityContext, IAuthorizationPolicy, [Policy] / [RequirePolicy] attributes with a source generator that emits DI registrations and per-request AuthorizerFor&lt;T&gt; dispatchers. Shared by AI.Sentinel and ZeroAlloc.Mediator.Authorization.</Description>
     <PackageTags>authorization;security;policy;dotnet;zeroalloc</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>

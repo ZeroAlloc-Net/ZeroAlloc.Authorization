@@ -58,7 +58,6 @@ using (var scope = sp.CreateScope())
     Console.WriteLine("AOT [RequirePolicy] allocation gate OK");
 }
 
-[AuthorizationPolicy("AdminOnly")]
 sealed class AdminOnlyPolicy : IAuthorizationPolicy
 {
     public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(

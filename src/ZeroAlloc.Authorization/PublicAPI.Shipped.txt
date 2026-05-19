@@ -8,12 +8,6 @@ ZeroAlloc.Authorization.AuthorizationFailure.AuthorizationFailure() -> void
 ZeroAlloc.Authorization.AuthorizationFailure.AuthorizationFailure(string! code, string? reason = null) -> void
 ZeroAlloc.Authorization.AuthorizationFailure.Code.get -> string!
 ZeroAlloc.Authorization.AuthorizationFailure.Reason.get -> string?
-ZeroAlloc.Authorization.AuthorizationPolicyAttribute
-ZeroAlloc.Authorization.AuthorizationPolicyAttribute.AuthorizationPolicyAttribute(string! name) -> void
-ZeroAlloc.Authorization.AuthorizationPolicyAttribute.Name.get -> string!
-ZeroAlloc.Authorization.AuthorizeAttribute
-ZeroAlloc.Authorization.AuthorizeAttribute.AuthorizeAttribute(string! policyName) -> void
-ZeroAlloc.Authorization.AuthorizeAttribute.PolicyName.get -> string!
 ZeroAlloc.Authorization.IAuthorizationPolicy
 ZeroAlloc.Authorization.ISecurityContext
 ZeroAlloc.Authorization.ISecurityContext.Claims.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!

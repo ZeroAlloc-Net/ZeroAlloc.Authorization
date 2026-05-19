@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.0.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.2.2...v2.0.0) (2026-05-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* drop sync IsAuthorized, async IsAuthorizedAsync, sync Evaluate from IAuthorizationPolicy. All policies must now implement async EvaluateAsync only. Sync-completing policies wrap their result in new ValueTask<...>(result) — allocation-free.
+
+### Features
+
+* v2 — source-generated policy registry + [Policy]/[RequirePolicy] rename ([#19](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/19)) ([5e3b2c7](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/5e3b2c71412b897145c2fc82283b32dd3cefd93b))
+
+
+### Documentation
+
+* v2 - rename to [Policy]/[RequirePolicy], async-only IAuthorizationPolicy ([#21](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/21)) ([9263ec5](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/9263ec55c36dbc380ab65099e2e9a1afd183c4fc))
+
 ## [1.2.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.2.1...v1.2.2) (2026-05-12)
 
 

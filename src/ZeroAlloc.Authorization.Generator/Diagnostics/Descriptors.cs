@@ -13,4 +13,12 @@ internal static class Descriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor DuplicatePolicyName = new(
+        id: "ZAUTH002",
+        title: "Duplicate policy name",
+        messageFormat: "Duplicate policy name '{0}'. Each [Policy] name must be unique within the compilation.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

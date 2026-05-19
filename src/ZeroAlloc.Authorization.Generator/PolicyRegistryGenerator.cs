@@ -22,7 +22,23 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         var requires = RequireSymbolWalker.Find(compilation);
         if (policies.Count == 0 && requires.Count == 0) return;
 
-        // Build a name→info dictionary for the emitter.
+        // ZAUTH002: detect duplicate [Policy] names before building byName.
+        var counts = new Dictionary<string, int>(System.StringComparer.Ordinal);
+        for (int i = 0; i < policies.Count; i++)
+        {
+            var name = policies[i].Name;
+            counts.TryGetValue(name, out var c);
+            counts[name] = c + 1;
+        }
+        foreach (var kvp in counts)
+        {
+            if (kvp.Value > 1)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(Descriptors.DuplicatePolicyName, Location.None, kvp.Key));
+            }
+        }
+
+        // Build a name→info dictionary for the emitter (last-write-wins for duplicates; ZAUTH002 flags them).
         var byName = new Dictionary<string, PolicyInfo>(System.StringComparer.Ordinal);
         for (int i = 0; i < policies.Count; i++)
         {

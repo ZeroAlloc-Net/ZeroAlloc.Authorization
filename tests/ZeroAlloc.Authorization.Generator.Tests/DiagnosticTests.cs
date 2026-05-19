@@ -21,6 +21,52 @@ public sealed record Foo(int Id);
     }
 
     [Fact]
+    public void ZAUTH002_DuplicatePolicyNames_FiresError()
+    {
+        var source = @"
+using ZeroAlloc.Authorization;
+namespace MyApp;
+
+[Policy(""admin"")]
+public sealed class AdminPolicyA : IAuthorizationPolicy
+{
+    public bool IsAuthorized(ISecurityContext ctx) => true;
+}
+
+[Policy(""admin"")]
+public sealed class AdminPolicyB : IAuthorizationPolicy
+{
+    public bool IsAuthorized(ISecurityContext ctx) => true;
+}
+";
+        var diagnostics = RunGenerator(source);
+        Assert.Contains(diagnostics, d => d.Id == "ZAUTH002" && d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void ZAUTH002_UniquePolicyNames_DoesNotFire()
+    {
+        var source = @"
+using ZeroAlloc.Authorization;
+namespace MyApp;
+
+[Policy(""admin"")]
+public sealed class AdminPolicy : IAuthorizationPolicy
+{
+    public bool IsAuthorized(ISecurityContext ctx) => true;
+}
+
+[Policy(""user"")]
+public sealed class UserPolicy : IAuthorizationPolicy
+{
+    public bool IsAuthorized(ISecurityContext ctx) => true;
+}
+";
+        var diagnostics = RunGenerator(source);
+        Assert.DoesNotContain(diagnostics, d => d.Id == "ZAUTH002");
+    }
+
+    [Fact]
     public void ZAUTH001_KnownPolicy_DoesNotFire()
     {
         var source = @"

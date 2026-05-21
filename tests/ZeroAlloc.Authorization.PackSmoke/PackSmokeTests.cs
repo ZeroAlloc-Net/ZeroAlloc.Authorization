@@ -69,16 +69,14 @@ public sealed class PackSmokeTests : IDisposable
 
         ScaffoldTemplate(useStandaloneGenerator: false);
 
+        // TestApp.Application contains a Wire.cs that calls AddZeroAllocAuthorization() —
+        // the generated extension. If the bundled analyzer fails to emit it, the build
+        // fails. This is a stronger guarantee than asserting on a generated file on disk
+        // (which could be empty / missing the expected API surface).
         var appCsproj = Path.Combine(_workDir, "src/TestApp.Application/TestApp.Application.csproj");
         var build = RunDotnet($"build \"{appCsproj}\" -c Release", _workDir);
         Assert.True(build.ExitCode == 0,
             $"Backward-compat scenario must still build.\nSTDOUT:\n{build.StdOut}\nSTDERR:\n{build.StdErr}");
-
-        var generated = Directory.GetFiles(
-            Path.Combine(_workDir, "src/TestApp.Application/obj/Release/net10.0/generated"),
-            "*ZeroAllocAuthorization.Generated*.cs",
-            SearchOption.AllDirectories);
-        Assert.NotEmpty(generated);
     }
 
     private void PackProject(string csproj)
@@ -175,6 +173,23 @@ public sealed class PackSmokeTests : IDisposable
 
             [RequirePolicy("TestPolicy")]
             public sealed record TestCommand(int Value);
+            """);
+        // Wire.cs forces the build to actually link against the generated
+        // AddZeroAllocAuthorization extension. If the generator silently produced
+        // an empty file (wrong PackageId, wrong analyzer path, etc.), the call
+        // here fails to compile — a stronger guarantee than a "file exists on
+        // disk" assertion.
+        File.WriteAllText(Path.Combine(appDir, "WireApplication.cs"), """
+            using Microsoft.Extensions.DependencyInjection;
+            using ZeroAlloc.Authorization.Generated;
+
+            namespace TestApp.Application;
+
+            public static class WireApplication
+            {
+                public static IServiceCollection AddTest(IServiceCollection s)
+                    => s.AddZeroAllocAuthorization();
+            }
             """);
 
         if (!useStandaloneGenerator)

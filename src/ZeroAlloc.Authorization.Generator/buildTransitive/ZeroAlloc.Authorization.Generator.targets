@@ -1,0 +1,26 @@
+<Project>
+  <!--
+    Auto-imported by NuGet into every project that has
+    ZeroAlloc.Authorization.Generator in its transitive package graph.
+
+    Removes the Generator's analyzer from @(Analyzer) in any project that
+    does NOT explicitly own [Policy] / [RequirePolicy] declarations
+    (i.e. has not set <ZeroAllocAuthorizationOwnsPolicies>true</...>).
+
+    This is required because the analyzer's @(Analyzer) item flows across
+    MSBuild ProjectReference edges by default — and NuGet's PrivateAssets
+    metadata does NOT block that propagation. Filtering inside this
+    buildTransitive target is the reliable mechanism.
+
+    The @(Analyzer->WithMetadataValue(...)) item-function form is required:
+    Condition="'%(Analyzer.NuGetPackageId)' == '...'" does not survive the
+    SDK's analyzer item flow reliably.
+  -->
+  <Target Name="ZeroAllocAuthorizationGenerator_RemoveAnalyzerWhenNotOwner"
+          BeforeTargets="CoreCompile"
+          Condition="'$(ZeroAllocAuthorizationOwnsPolicies)' != 'true'">
+    <ItemGroup>
+      <Analyzer Remove="@(Analyzer->WithMetadataValue('NuGetPackageId','ZeroAlloc.Authorization.Generator'))" />
+    </ItemGroup>
+  </Target>
+</Project>

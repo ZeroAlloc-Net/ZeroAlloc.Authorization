@@ -12,10 +12,8 @@
     <!-- Pack as a generator-only package. -->
     <IsPackable>true</IsPackable>
     <PackageId>ZeroAlloc.Authorization.Generator</PackageId>
-    <Description>Source generator for ZeroAlloc.Authorization — emits per-assembly DI registrations and AuthorizerFor&lt;T&gt; dispatchers from [Policy] and [RequirePolicy] declarations. Reference alongside ZeroAlloc.Authorization with PrivateAssets="all" to avoid analyzer flow across ProjectReference.</Description>
+    <Description>Source generator for ZeroAlloc.Authorization — emits per-assembly DI registrations and AuthorizerFor&lt;T&gt; dispatchers from [Policy] and [RequirePolicy] declarations. Reference from the project that declares [Policy] / [RequirePolicy] and set &lt;ZeroAllocAuthorizationOwnsPolicies&gt;true&lt;/ZeroAllocAuthorizationOwnsPolicies&gt; in that project's PropertyGroup.</Description>
     <PackageTags>authorization;source-generator;analyzer;dotnet;zeroalloc</PackageTags>
-    <!-- developmentDependency: never flows transitively even without PrivateAssets="all". -->
-    <DevelopmentDependency>true</DevelopmentDependency>
     <!-- No runtime payload — ship the analyzer DLL only, not in lib/. -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <!-- Override repo-wide IncludeSymbols=true: an analyzer-only package with no lib/
@@ -39,5 +37,16 @@
           Pack="true"
           PackagePath="analyzers/dotnet/cs"
           Visible="false" />
+    <!-- Pack the build/buildTransitive guard targets. The buildTransitive target
+         is auto-imported by NuGet into every project that has this package in
+         its transitive package graph — required because we let this package
+         flow transitively (no DevelopmentDependency=true) so that downstream
+         projects pick up the per-project analyzer filter. -->
+    <None Include="build\ZeroAlloc.Authorization.Generator.targets"
+          Pack="true"
+          PackagePath="build\ZeroAlloc.Authorization.Generator.targets" />
+    <None Include="buildTransitive\ZeroAlloc.Authorization.Generator.targets"
+          Pack="true"
+          PackagePath="buildTransitive\ZeroAlloc.Authorization.Generator.targets" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,22 @@
+<Project>
+  <!--
+    Auto-imported by NuGet into every project that consumes
+    ZeroAlloc.Authorization (direct or transitive).
+
+    When the standalone ZeroAlloc.Authorization.Generator package is ALSO
+    referenced, this target removes the analyzer bundled inside
+    ZeroAlloc.Authorization to prevent double-generation of
+    AddZeroAllocAuthorization() (CS0121 ambiguous call at consumer build).
+
+    The @(Analyzer->WithMetadataValue(...)) item-function form is required:
+    Condition="'%(Analyzer.NuGetPackageId)' == '...'" does not survive the
+    SDK's analyzer item flow reliably (validated against the ZA.Templates
+    za-clean workaround).
+  -->
+  <Target Name="ZeroAllocAuthorization_RemoveBundledAnalyzerWhenStandalonePresent"
+          BeforeTargets="CoreCompile">
+    <ItemGroup Condition="'@(Analyzer->WithMetadataValue('NuGetPackageId','ZeroAlloc.Authorization.Generator')->Count())' != '0'">
+      <Analyzer Remove="@(Analyzer->WithMetadataValue('NuGetPackageId','ZeroAlloc.Authorization'))" />
+    </ItemGroup>
+  </Target>
+</Project>

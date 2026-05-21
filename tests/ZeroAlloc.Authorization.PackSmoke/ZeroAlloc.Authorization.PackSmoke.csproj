@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ZeroAlloc.Authorization.PackSmoke</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <!-- Integration test packs and consumes real .nupkg files; treat as
+         non-parallel so concurrent runs don't churn the temp NuGet feed. -->
+    <ParallelizeTestCollections>false</ParallelizeTestCollections>
+    <!-- Suppress analyzer noise common to test scaffolding code:
+         MA0004 ConfigureAwait, MA0011 IFormatProvider, MA0002 string comparer,
+         MA0048 file name must match type, MA0051 method length,
+         MA0074 string.Contains overload, MA0006 string equality. -->
+    <NoWarn>$(NoWarn);MA0002;MA0004;MA0006;MA0011;MA0048;MA0051;MA0074</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
+    <PackageReference Include="xunit" Version="2.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

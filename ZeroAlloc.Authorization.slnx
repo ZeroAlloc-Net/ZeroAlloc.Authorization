@@ -5,4 +5,5 @@
   <Project Path="benchmarks/ZeroAlloc.Authorization.Benchmarks/ZeroAlloc.Authorization.Benchmarks.csproj" />
   <Project Path="tests/ZeroAlloc.Authorization.Tests/ZeroAlloc.Authorization.Tests.csproj" />
   <Project Path="tests/ZeroAlloc.Authorization.Generator.Tests/ZeroAlloc.Authorization.Generator.Tests.csproj" />
+  <Project Path="tests/ZeroAlloc.Authorization.PackSmoke/ZeroAlloc.Authorization.PackSmoke.csproj" />
 </Solution>

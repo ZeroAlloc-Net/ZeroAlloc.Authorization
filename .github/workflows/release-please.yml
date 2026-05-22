@@ -46,10 +46,23 @@ jobs:
         run: dotnet build ZeroAlloc.Authorization.slnx --configuration Release -p:Version=${{ needs.release-please.outputs.version }}
 
       - name: Test
-        run: dotnet test tests/ZeroAlloc.Authorization.Tests/ZeroAlloc.Authorization.Tests.csproj --configuration Release --no-build --verbosity normal
+        run: dotnet test --configuration Release --no-build --verbosity normal
 
-      - name: Pack
-        run: dotnet pack src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj --configuration Release --no-build --output ./artifacts -p:Version=${{ needs.release-please.outputs.version }}
+      - name: Pack every src/* csproj
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        # Walk src/*/*.csproj — pack every project. dotnet pack on a project
+        # with IsPackable=false produces no .nupkg, so internal / non-shippable
+        # projects are skipped automatically. Mirrors publish-from-manifest.yml
+        # so future sub-package additions don't silently miss publish.
+        run: |
+          mkdir -p ./artifacts
+          for csproj in src/*/*.csproj; do
+            echo "Packing $csproj at version $VERSION"
+            dotnet pack "$csproj" --configuration Release --no-build \
+              --output ./artifacts -p:Version="$VERSION"
+          done
+          ls -la ./artifacts
 
       - name: Push to NuGet
         run: dotnet nuget push ./artifacts/*nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate

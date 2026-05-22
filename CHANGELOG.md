@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.0.0...v2.0.1) (2026-05-22)
+
+
+### Features
+
+* split ZeroAlloc.Authorization.Generator into a standalone package (2.0.1) ([#22](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/22)) ([9333bdc](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/9333bdc609ca68417aaf1b8366f414a6e09b8611))
+
 ## [2.0.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v1.2.2...v2.0.0) (2026-05-19)
 
 

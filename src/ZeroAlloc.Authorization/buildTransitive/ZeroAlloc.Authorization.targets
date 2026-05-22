@@ -30,8 +30,21 @@
     Condition="'%(Analyzer.NuGetPackageId)' == '...'" does not survive the
     SDK's analyzer item flow reliably.
   -->
+  <!--
+    BeforeTargets="_HandlePackageFileConflicts" is load-bearing. The bundled
+    analyzer in ZeroAlloc.Authorization and the analyzer in the standalone
+    ZeroAlloc.Authorization.Generator package ship the same DLL filename
+    (ZeroAlloc.Authorization.Generator.dll) at the same NuGet path
+    (analyzers/dotnet/cs/). MSBuild's _HandlePackageFileConflicts target
+    dedupes them by AssemblyVersion and discards one — the survivor carries
+    only its own NuGetPackageId metadata. Firing AT _HandlePackageFileConflicts
+    (or later, at CoreCompile) leaves the filter chasing a dropped item.
+    Firing BEFORE conflict resolution removes the bundled first, no conflict
+    triggers, and the standalone survives. This was the root cause of the
+    2.0.1 regression that produced no generator output in consumer builds.
+  -->
   <Target Name="ZeroAllocAuthorization_FilterAnalyzersByConsumerProperties"
-          BeforeTargets="CoreCompile">
+          BeforeTargets="_HandlePackageFileConflicts">
     <ItemGroup Condition="'$(ZeroAllocAuthorizationDisableBundledAnalyzer)' == 'true'">
       <Analyzer Remove="@(Analyzer->WithMetadataValue('NuGetPackageId','ZeroAlloc.Authorization'))" />
     </ItemGroup>

@@ -62,6 +62,39 @@ public sealed class PackSmokeTests : IDisposable
     }
 
     [Fact]
+    public void Split_package_pattern_survives_assemblyversion_mismatch()
+    {
+        // Regression test for the 2.0.1 publish-pipeline bug. The bundled-in-main
+        // analyzer was packed by release-please.yml with -p:Version=2.0.1 (high
+        // AssemblyVersion). The standalone Generator package was packed by
+        // publish-from-manifest.yml without -p:Version (default 1.0.0
+        // AssemblyVersion). MSBuild's _HandlePackageFileConflicts target picked
+        // the bundled (higher AssemblyVersion wins) and discarded the standalone.
+        // The DisableBundled guard then removed the bundled too, leaving no
+        // analyzer at all. The fix moves the guard to fire BEFORE
+        // _HandlePackageFileConflicts so the bundled is gone before conflict
+        // resolution sees it; the standalone survives regardless of which copy
+        // would have won.
+        var repoRoot = LocateRepoRoot();
+
+        // Force a high AssemblyVersion on the bundled DLL (via main package)
+        // and a low one on the standalone Generator. Reproduces production.
+        PackProject(Path.Combine(repoRoot, "src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj"),
+                    assemblyVersion: "9.9.9");
+        PackProject(Path.Combine(repoRoot, "src/ZeroAlloc.Authorization.Generator/ZeroAlloc.Authorization.Generator.csproj"),
+                    assemblyVersion: "1.0.0");
+
+        ScaffoldTemplate(useStandaloneGenerator: true);
+
+        var apiCsproj = Path.Combine(_workDir, "src/TestApp.Api/TestApp.Api.csproj");
+        var build = RunDotnet($"build \"{apiCsproj}\" -c Release", _workDir);
+        Assert.True(build.ExitCode == 0,
+            $"Build must succeed regardless of AssemblyVersion ordering between bundled and standalone analyzers.\nSTDOUT:\n{build.StdOut}\nSTDERR:\n{build.StdErr}");
+        Assert.DoesNotContain("CS0121", build.StdOut, StringComparison.Ordinal);
+        Assert.DoesNotContain("CS0234", build.StdOut, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Bundled_only_pattern_still_works_for_2_0_0_consumers()
     {
         var repoRoot = LocateRepoRoot();
@@ -80,9 +113,13 @@ public sealed class PackSmokeTests : IDisposable
     }
 
     private void PackProject(string csproj)
+        => PackProject(csproj, assemblyVersion: null);
+
+    private void PackProject(string csproj, string? assemblyVersion)
     {
+        var versionArg = assemblyVersion is null ? "" : $" -p:Version={assemblyVersion}";
         var result = RunDotnet(
-            $"pack \"{csproj}\" -c Release -p:PackageVersion={_testVersion} -o \"{_feed}\"",
+            $"pack \"{csproj}\" -c Release -p:PackageVersion={_testVersion}{versionArg} -o \"{_feed}\"",
             Environment.CurrentDirectory);
         Assert.True(result.ExitCode == 0, $"Pack failed for {csproj}:\n{result.StdOut}\n{result.StdErr}");
     }

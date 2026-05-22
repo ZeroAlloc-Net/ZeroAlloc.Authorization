@@ -5,13 +5,48 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <IsRoslynComponent>true</IsRoslynComponent>
-    <IsPackable>false</IsPackable>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <!-- RS2008: Analyzer release tracking — not packaging as a stand-alone analyzer, descriptors live alongside generator. -->
     <NoWarn>$(NoWarn);RS2008</NoWarn>
+
+    <!-- Pack as a generator-only package. -->
+    <IsPackable>true</IsPackable>
+    <PackageId>ZeroAlloc.Authorization.Generator</PackageId>
+    <Description>Source generator for ZeroAlloc.Authorization — emits per-assembly DI registrations and AuthorizerFor&lt;T&gt; dispatchers from [Policy] and [RequirePolicy] declarations. Reference from the project that declares [Policy] / [RequirePolicy] and set &lt;ZeroAllocAuthorizationOwnsPolicies&gt;true&lt;/ZeroAllocAuthorizationOwnsPolicies&gt; in that project's PropertyGroup.</Description>
+    <PackageTags>authorization;source-generator;analyzer;dotnet;zeroalloc</PackageTags>
+    <!-- No runtime payload — ship the analyzer DLL only, not in lib/. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- Override repo-wide IncludeSymbols=true: an analyzer-only package with no lib/
+         payload and no transitive dependencies has nothing to put in a .snupkg,
+         which makes NuGet fail with NU5017 ("Cannot create a package that has no
+         dependencies nor content"). The generator DLL lives at analyzers/dotnet/cs/,
+         which is outside the lib/ paths the snupkg format mirrors. -->
+    <IncludeSymbols>false</IncludeSymbols>
+    <!-- Suppress the "your package has no lib/ or ref/ folder" warning. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.3.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="5.3.0" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Pack the generator DLL into analyzers/dotnet/cs/ — the standard
+         Roslyn-component location NuGet auto-converts into @(Analyzer). -->
+    <None Include="$(OutputPath)$(AssemblyName).dll"
+          Pack="true"
+          PackagePath="analyzers/dotnet/cs"
+          Visible="false" />
+    <!-- Pack the build/buildTransitive guard targets. The buildTransitive target
+         is auto-imported by NuGet into every project that has this package in
+         its transitive package graph — required because we let this package
+         flow transitively (no DevelopmentDependency=true) so that downstream
+         projects pick up the per-project analyzer filter. -->
+    <None Include="build\ZeroAlloc.Authorization.Generator.targets"
+          Pack="true"
+          PackagePath="build\ZeroAlloc.Authorization.Generator.targets" />
+    <None Include="buildTransitive\ZeroAlloc.Authorization.Generator.targets"
+          Pack="true"
+          PackagePath="buildTransitive\ZeroAlloc.Authorization.Generator.targets" />
   </ItemGroup>
 </Project>

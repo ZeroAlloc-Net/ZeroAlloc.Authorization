@@ -1,0 +1,8 @@
+<Project>
+  <!--
+    Intentionally empty. Some older SDK + NuGet combos warn when a package
+    ships buildTransitive/ without a sibling build/ file. The actual guard
+    target lives in buildTransitive/ZeroAlloc.Authorization.targets so it
+    runs for direct and transitive consumers alike.
+  -->
+</Project>

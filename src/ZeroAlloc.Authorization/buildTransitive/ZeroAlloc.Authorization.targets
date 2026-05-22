@@ -1,0 +1,42 @@
+<Project>
+  <!--
+    Property-driven analyzer-leak guard for the ZeroAlloc.Authorization
+    split-package recipe.
+
+    Two opt-in properties control this target:
+
+      <ZeroAllocAuthorizationDisableBundledAnalyzer>true</...>
+        Removes the bundled-in-main analyzer (NuGetPackageId='ZeroAlloc.Authorization')
+        from @(Analyzer) before CoreCompile. Set this once in the consumer
+        repo's Directory.Build.props when adopting the standalone
+        ZeroAlloc.Authorization.Generator package.
+
+      <ZeroAllocAuthorizationOwnsPolicies>true</...>
+        Marks the current project as the one that declares [Policy] /
+        [RequirePolicy] (typically the Application project). When this
+        property is NOT set, the standalone-package analyzer
+        (NuGetPackageId='ZeroAlloc.Authorization.Generator') is removed
+        from @(Analyzer) so it does not re-run in downstream projects
+        that pick the analyzer up via MSBuild ProjectReference
+        propagation. NuGet's PrivateAssets="all" does NOT block this
+        MSBuild-level propagation — only an explicit @(Analyzer) Remove
+        does.
+
+    Default behaviour (neither property set): no filtering. 2.0.0-style
+    consumers see exactly the analyzer set NuGet resolved for them.
+    Backward compatible.
+
+    The @(Analyzer->WithMetadataValue(...)) item-function form is required:
+    Condition="'%(Analyzer.NuGetPackageId)' == '...'" does not survive the
+    SDK's analyzer item flow reliably.
+  -->
+  <Target Name="ZeroAllocAuthorization_FilterAnalyzersByConsumerProperties"
+          BeforeTargets="CoreCompile">
+    <ItemGroup Condition="'$(ZeroAllocAuthorizationDisableBundledAnalyzer)' == 'true'">
+      <Analyzer Remove="@(Analyzer->WithMetadataValue('NuGetPackageId','ZeroAlloc.Authorization'))" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(ZeroAllocAuthorizationOwnsPolicies)' != 'true'">
+      <Analyzer Remove="@(Analyzer->WithMetadataValue('NuGetPackageId','ZeroAlloc.Authorization.Generator'))" />
+    </ItemGroup>
+  </Target>
+</Project>

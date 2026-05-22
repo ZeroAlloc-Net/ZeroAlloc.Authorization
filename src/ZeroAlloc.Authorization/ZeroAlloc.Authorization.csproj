@@ -27,6 +27,18 @@
                       PrivateAssets="all" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Pack the buildTransitive guard target into the package so NuGet
+         auto-imports it into every consumer. The build/ stub silences
+         the matching-folder warning on older SDK/NuGet combos. -->
+    <None Include="build\ZeroAlloc.Authorization.targets"
+          Pack="true"
+          PackagePath="build\ZeroAlloc.Authorization.targets" />
+    <None Include="buildTransitive\ZeroAlloc.Authorization.targets"
+          Pack="true"
+          PackagePath="buildTransitive\ZeroAlloc.Authorization.targets" />
+  </ItemGroup>
+
   <Target Name="IncludeGeneratorInPackage" BeforeTargets="_GetPackageFiles">
     <ItemGroup>
       <None Include="$(MSBuildThisFileDirectory)..\ZeroAlloc.Authorization.Generator\bin\$(Configuration)\netstandard2.0\ZeroAlloc.Authorization.Generator.dll"

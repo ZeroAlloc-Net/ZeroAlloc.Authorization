@@ -16,8 +16,16 @@
     Condition="'%(Analyzer.NuGetPackageId)' == '...'" does not survive the
     SDK's analyzer item flow reliably.
   -->
+  <!--
+    BeforeTargets="_HandlePackageFileConflicts" mirrors the main package's
+    guard. When the bundled-in-main analyzer and this standalone analyzer
+    coexist in @(Analyzer), MSBuild's conflict resolution discards one
+    before CoreCompile. By filtering before that, this target ensures the
+    consumer-property contract holds regardless of which copy MSBuild
+    would have picked.
+  -->
   <Target Name="ZeroAllocAuthorizationGenerator_RemoveAnalyzerWhenNotOwner"
-          BeforeTargets="CoreCompile"
+          BeforeTargets="_HandlePackageFileConflicts"
           Condition="'$(ZeroAllocAuthorizationOwnsPolicies)' != 'true'">
     <ItemGroup>
       <Analyzer Remove="@(Analyzer->WithMetadataValue('NuGetPackageId','ZeroAlloc.Authorization.Generator'))" />

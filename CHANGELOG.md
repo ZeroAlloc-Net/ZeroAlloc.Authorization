@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.0.1...v2.0.2) (2026-05-22)
+
+
+### Bug Fixes
+
+* fire analyzer-filter guards before _HandlePackageFileConflicts (2.0.2) ([#24](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/24)) ([d7e30a6](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/d7e30a6a48b732f48a1393cc91854e5c07e46316))
+
 ## [2.0.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.0.0...v2.0.1) (2026-05-22)
 
 

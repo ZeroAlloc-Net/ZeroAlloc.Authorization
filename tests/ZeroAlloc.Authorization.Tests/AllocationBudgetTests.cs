@@ -1,5 +1,5 @@
 using ZeroAlloc.Authorization;
-using ZeroAlloc.Authorization.AotSmoke.Internal;
+using ZeroAlloc.TestHelpers;
 using ZeroAlloc.Results;
 
 namespace ZeroAlloc.Authorization.Tests;

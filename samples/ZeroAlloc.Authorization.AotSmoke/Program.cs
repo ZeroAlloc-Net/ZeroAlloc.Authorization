@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using ZeroAlloc.Authorization;
-using ZeroAlloc.Authorization.AotSmoke.Internal;
+using ZeroAlloc.TestHelpers;
 using ZeroAlloc.Authorization.Generated;
 using ZeroAlloc.Results;
 

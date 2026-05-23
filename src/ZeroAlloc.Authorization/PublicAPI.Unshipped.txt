@@ -1,1 +1,4 @@
 #nullable enable
+ZeroAlloc.Authorization.RequireAnyPolicyAttribute
+ZeroAlloc.Authorization.RequireAnyPolicyAttribute.PolicyNames.get -> string![]!
+ZeroAlloc.Authorization.RequireAnyPolicyAttribute.RequireAnyPolicyAttribute(params string![]! policyNames) -> void

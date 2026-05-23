@@ -38,6 +38,15 @@ internal static class RequireSymbolWalker
         while (stack.Count > 0)
         {
             var current = stack.Pop();
+
+            // Nested types pushed via type.GetTypeMembers() are popped here as INamedTypeSymbol.
+            // The original walker only iterated their members; ProcessType was never called on the
+            // nested type itself. Without this, [RequirePolicy] on a nested class is silently ignored.
+            if (current is INamedTypeSymbol currentType)
+            {
+                ProcessType(currentType, requireAttr, requireAnyAttr, sink, diagnostics);
+            }
+
             foreach (var member in current.GetMembers())
             {
                 if (member is INamespaceSymbol ns)

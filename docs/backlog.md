@@ -2,92 +2,11 @@
 
 Candidate features that may move into the core contract once concrete consumer needs emerge. Order is rough priority, not commitment. Nothing here ships speculatively — items graduate when at least two hosts independently want the same thing.
 
-## 1. Policy composition with explicit OR
-
-**What:** allow stacked `[RequirePolicy]` declarations to express OR semantics in addition to the current AND default.
-
-```csharp
-[RequirePolicy("Admin")]
-[RequirePolicy("Premium")]   // implicit AND — both must pass (current behavior)
-public sealed record DeleteUserCommand(string Id);
-
-// Hypothetical OR knob:
-[RequirePolicy("Admin", Mode = RequirePolicyMode.Any)]
-[RequirePolicy("Premium", Mode = RequirePolicyMode.Any)]
-public sealed record ViewBillingQuery();
-```
-
-**Why:** policies stay small and reusable; consumers stop writing `AdminAndPremiumPolicy` aggregates. Without this, every combination needs a new `[Policy]` class.
-
-**Open questions:**
-- Single attribute with `params string[]` + `Mode` enum, or per-attribute `Mode` property that the generator evaluates?
-- Default mode when stacking — keep AND or switch to explicit?
-- Short-circuit on first failure or evaluate all (for richer failure reporting)?
-
-**Graduation signal:** at least one host needs OR composition that's awkward to express in the policy body.
-
-**Generator coupling notes:** the bundled generator currently emits AND-only dispatchers. Adding `Mode` requires teaching `AuthorizerForEmitter` to emit a different short-circuit pattern and bumping the generator's emit version.
-
-## 2. Parameterized policies
-
-**What:** policy names accept compile-time arguments that the policy class consumes.
-
-```csharp
-[RequirePolicy("MinAge", 18)]
-public sealed record ApplyForLicenseCommand(...);
-
-[Policy("MinAge")]
-public sealed class MinAgePolicy : IAuthorizationPolicy<int>
-{
-    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
-        ISecurityContext ctx, int minAge, CancellationToken ct = default)
-        => new(int.TryParse(ctx.Claims["age"], out var a) && a >= minAge
-            ? UnitResult<AuthorizationFailure>.Success()
-            : new AuthorizationFailure("min_age.below", $"age below {minAge}"));
-}
-```
-
-**Why:** removes the explosion of `MinAge18Policy`, `MinAge21Policy`, etc.
-
-**Open questions:**
-- Generic `IAuthorizationPolicy<T>` per arg type, or one base interface with `object[]` parameters?
-- Constants only or arbitrary expressions? (Attributes only allow constants.)
-- How does the generator handle parameterless and parameterized variants of the same policy name?
-
-**Graduation signal:** a consumer has shipped at least three near-duplicate policies that differ only by a constant.
-
-**Generator coupling notes:** the bundled generator currently reads only the positional `policyName` arg. Adding parameter forwarding requires the generator to capture the additional constructor args from `[RequirePolicy(...)]` and pass them into the policy's `EvaluateAsync` call site.
-
-## 3. Resource-based authorization
-
-**What:** a first-class pattern for "the resource being acted on" beyond per-host `I*SecurityContext` subinterfaces.
-
-```csharp
-public interface IResourceSecurityContext<TResource> : ISecurityContext
-{
-    TResource Resource { get; }
-}
-
-public sealed class OwnerOnlyPolicy : IAuthorizationPolicy
-{
-    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
-        ISecurityContext ctx, CancellationToken ct = default)
-        => new(ctx is IResourceSecurityContext<Post> rc && rc.Resource.OwnerId == ctx.Id
-            ? UnitResult<AuthorizationFailure>.Success()
-            : new AuthorizationFailure("resource.not_owner"));
-}
-```
-
-**Why:** today every host invents its own subinterface (`IToolCallSecurityContext`, `IRequestSecurityContext<TRequest>`). A shared `IResourceSecurityContext<T>` lets the *same* policy class work across hosts when the resource type matches.
-
-**Open questions:**
-- Generic interface in core, or leave to hosts and accept the divergence?
-- How does it compose with the existing host-specific subinterfaces (e.g. is `IRequestSecurityContext<TRequest>` *also* an `IResourceSecurityContext<TRequest>`?)?
-- Does the host populate Resource by convention (e.g. mediator request = resource)?
-
-**Graduation signal:** at least two hosts want to share a policy that operates on a typed resource.
-
-**Host coupling notes:** **Runtime + DI surface change required** in `ZeroAlloc.Mediator.Authorization`. Host must populate the typed-resource context with the request being dispatched. AI.Sentinel would similarly need to populate the resource (the tool call) — neither host adopts trivially.
+> **Update 2026-05-23:** Items #1 (OR composition), #2 (parameterized policies),
+> and #3 (resource-based authorization) graduated into v2.1 — see
+> [`plans/2026-05-23-authorization-v2.1-extensions-design.md`](plans/2026-05-23-authorization-v2.1-extensions-design.md).
+> Host adoption of #3 (populating IResourceSecurityContext<TResource>
+> in Mediator.Authorization + AI.Sentinel) is a separate follow-up.
 
 ## 4. Standard failure shape — ✅ shipped (v1.0.0)
 

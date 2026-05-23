@@ -42,13 +42,17 @@ internal static class AuthorizerForEmitter
         sb.AppendLine("            global::ZeroAlloc.Authorization.ISecurityContext ctx,");
         sb.AppendLine("            global::System.Threading.CancellationToken ct = default)");
         sb.AppendLine("        {");
-        foreach (var group in req.Groups)
+        for (int gi = 0; gi < req.Groups.Count; gi++)
         {
+            var group = req.Groups[gi];
             if (group.Kind == RequireGroupKind.All)
             {
                 EmitAllGroup(sb, req, group, policiesByName, diagnostics);
             }
-            // Kind=Any: Task 7
+            else // Any
+            {
+                EmitAnyGroup(sb, req, group, gi, policiesByName, diagnostics);
+            }
         }
         sb.AppendLine("            return global::ZeroAlloc.Results.UnitResult<global::ZeroAlloc.Authorization.AuthorizationFailure>.Success();");
         sb.AppendLine("        }");
@@ -91,6 +95,63 @@ internal static class AuthorizerForEmitter
         }
         sb.AppendLine($"            var __r_{local} = await __p_{local}.EvaluateAsync(ctx{argList}, ct).ConfigureAwait(false);");
         sb.AppendLine($"            if (__r_{local}.IsFailure) return __r_{local};");
+    }
+
+    private static void EmitAnyGroup(
+        StringBuilder sb,
+        RequireInfo req,
+        RequireGroup group,
+        int groupIndex,
+        IReadOnlyDictionary<string, PolicyInfo> policiesByName,
+        List<Diagnostic> diagnostics)
+    {
+        var groupId = req.SafeIdentifier + "_g" + groupIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        sb.AppendLine();
+        sb.AppendLine($"            // OR group {groupId}");
+
+        var failureLocalNames = new List<string>();
+        var failurePolicyNames = new List<string>();
+        foreach (var name in group.PolicyNames)
+        {
+            if (!policiesByName.TryGetValue(name, out var policy)) continue;
+            // [RequireAnyPolicy] only accepts parameterless policies in v2.1.
+            if (policy.Arity != 0)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    Descriptors.RequirePolicyArgShapeMismatch,
+                    group.AttributeLocation,
+                    name, req.FullyQualifiedTypeName,
+                    $"[RequireAnyPolicy] only accepts parameterless policies; '{name}' implements IAuthorizationPolicy<...>"));
+                continue;
+            }
+            var local = Sanitize(name) + "_" + groupId;
+            failureLocalNames.Add(local);
+            failurePolicyNames.Add(name);
+            sb.AppendLine($"            global::ZeroAlloc.Authorization.IAuthorizationPolicy __p_{local} = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{policy.FullyQualifiedTypeName}>(_sp);");
+            sb.AppendLine($"            var __r_{local} = await __p_{local}.EvaluateAsync(ctx, ct).ConfigureAwait(false);");
+            sb.AppendLine($"            if (__r_{local}.IsSuccess) goto __or_pass_{groupId};");
+        }
+
+        if (failureLocalNames.Count == 0)
+        {
+            sb.AppendLine($"            __or_pass_{groupId}: ;");
+            return;
+        }
+
+        // All-fail synthesis.
+        sb.Append("            return global::ZeroAlloc.Results.UnitResult<global::ZeroAlloc.Authorization.AuthorizationFailure>.Failure(\n");
+        sb.Append("                new global::ZeroAlloc.Authorization.AuthorizationFailure(\n");
+        sb.Append("                    \"any.all_failed\",\n");
+        sb.Append("                    $\"");
+        for (int i = 0; i < failureLocalNames.Count; i++)
+        {
+            var pName = failurePolicyNames[i];
+            var local = failureLocalNames[i];
+            if (i > 0) sb.Append(" OR ");
+            sb.Append("[").Append(pName).Append(": {__r_").Append(local).Append(".Error.Reason ?? __r_").Append(local).Append(".Error.Code}]");
+        }
+        sb.Append("\"));\n");
+        sb.AppendLine($"            __or_pass_{groupId}: ;");
     }
 
     /// <summary>Returns null when args match policy.Arity/TypeArgs; otherwise returns a shape-error string for ZAUTH007.</summary>

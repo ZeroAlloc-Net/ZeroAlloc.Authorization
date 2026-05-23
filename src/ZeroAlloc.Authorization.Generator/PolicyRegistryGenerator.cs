@@ -20,19 +20,37 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
     {
         var policyResult = PolicySymbolWalker.Find(compilation);
         var policies = policyResult.Policies;
-        for (int i = 0; i < policyResult.Diagnostics.Count; i++)
-        {
-            spc.ReportDiagnostic(policyResult.Diagnostics[i]);
-        }
+        ReportAll(spc, policyResult.Diagnostics);
+
         var requireResult = RequireSymbolWalker.Find(compilation);
         var requires = requireResult.Requires;
-        for (int i = 0; i < requireResult.Diagnostics.Count; i++)
-        {
-            spc.ReportDiagnostic(requireResult.Diagnostics[i]);
-        }
+        ReportAll(spc, requireResult.Diagnostics);
+
         if (policies.Count == 0 && requires.Count == 0) return;
 
-        // ZAUTH002: detect duplicate [Policy] names before building byName.
+        ReportDuplicatePolicyNames(spc, policies);
+        var byName = BuildPolicyByNameMap(policies);
+        ReportUnknownPolicyReferences(spc, requires, byName);
+
+        var emitDiagnostics = new List<Diagnostic>();
+        var authorizers = AuthorizerForEmitter.Emit(requires, byName, emitDiagnostics);
+        ReportAll(spc, emitDiagnostics);
+        var registration = DIRegistrationEmitter.Emit(policies, requires);
+
+        spc.AddSource("ZeroAllocAuthorization.Generated.g.cs", SourceText.From(authorizers + registration, System.Text.Encoding.UTF8));
+    }
+
+    private static void ReportAll(SourceProductionContext spc, IReadOnlyList<Diagnostic> diagnostics)
+    {
+        for (int i = 0; i < diagnostics.Count; i++)
+        {
+            spc.ReportDiagnostic(diagnostics[i]);
+        }
+    }
+
+    // ZAUTH002: detect duplicate [Policy] names before building byName.
+    private static void ReportDuplicatePolicyNames(SourceProductionContext spc, IReadOnlyList<PolicyInfo> policies)
+    {
         var counts = new Dictionary<string, int>(System.StringComparer.Ordinal);
         for (int i = 0; i < policies.Count; i++)
         {
@@ -47,15 +65,25 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
                 spc.ReportDiagnostic(Diagnostic.Create(Descriptors.DuplicatePolicyName, Location.None, kvp.Key));
             }
         }
+    }
 
-        // Build a name→info dictionary for the emitter (last-write-wins for duplicates; ZAUTH002 flags them).
+    // Build a name→info dictionary for the emitter (last-write-wins for duplicates; ZAUTH002 flags them).
+    private static Dictionary<string, PolicyInfo> BuildPolicyByNameMap(IReadOnlyList<PolicyInfo> policies)
+    {
         var byName = new Dictionary<string, PolicyInfo>(System.StringComparer.Ordinal);
         for (int i = 0; i < policies.Count; i++)
         {
             byName[policies[i].PolicyName] = policies[i];
         }
+        return byName;
+    }
 
-        // ZAUTH001: every [RequirePolicy] name must resolve to a known [Policy].
+    // ZAUTH001: every [RequirePolicy] name must resolve to a known [Policy].
+    private static void ReportUnknownPolicyReferences(
+        SourceProductionContext spc,
+        IReadOnlyList<RequireInfo> requires,
+        IReadOnlyDictionary<string, PolicyInfo> byName)
+    {
         for (int i = 0; i < requires.Count; i++)
         {
             var req = requires[i];
@@ -72,10 +100,5 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
                 }
             }
         }
-
-        var authorizers = AuthorizerForEmitter.Emit(requires, byName);
-        var registration = DIRegistrationEmitter.Emit(policies, requires);
-
-        spc.AddSource("ZeroAllocAuthorization.Generated.g.cs", SourceText.From(authorizers + registration, System.Text.Encoding.UTF8));
     }
 }

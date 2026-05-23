@@ -56,6 +56,39 @@ using (var scope = sp.CreateScope())
         "AuthorizerFor<AotSmokeRequest>.EvaluateAsync (allow)");
 
     Console.WriteLine("AOT [RequirePolicy] allocation gate OK");
+
+    // ------------------------------------------------------------------------
+    // v2.1 - [RequireAnyPolicy] short-circuit on first success.
+    // Premium succeeds, Trusted denies — the OR group must surface success
+    // because at least one candidate passed.
+    // ------------------------------------------------------------------------
+    var orAuth = scope.ServiceProvider
+        .GetRequiredService<AuthorizerFor<OrRequest>>();
+    var orResult = await orAuth.EvaluateAsync(AnonymousSecurityContext.Instance);
+    if (!orResult.IsSuccess)
+        throw new InvalidOperationException("[RequireAnyPolicy] AOT smoke: expected success");
+
+    Console.WriteLine("AOT [RequireAnyPolicy] OK");
+
+    // ------------------------------------------------------------------------
+    // v2.1 - parameterized [RequirePolicy("MinAge", 18)] dispatch through the
+    // generator-emitted IAuthorizationPolicy<int> wire.
+    // ------------------------------------------------------------------------
+    var paramAuth = scope.ServiceProvider
+        .GetRequiredService<AuthorizerFor<MinAgeRequest>>();
+    var paramResult = await paramAuth.EvaluateAsync(new AotAgedContext("alice", 21));
+    if (!paramResult.IsSuccess)
+        throw new InvalidOperationException("[Parameterized] AOT smoke: expected success");
+
+    Console.WriteLine("AOT [RequirePolicy(MinAge,18)] OK");
+
+    // ------------------------------------------------------------------------
+    // v2.1 - IResourceSecurityContext<T> probe. Verifies the interface
+    // surfaces in AOT (the contract is shipped in v2.1; host packages adopt
+    // by populating it later — until then a downcast falls through to false).
+    // ------------------------------------------------------------------------
+    IResourceSecurityContext<string>? probe = null;
+    Console.WriteLine($"[IResourceSecurityContext] probe is {(probe is null ? "null" : "set")}");
 }
 
 sealed class AdminOnlyPolicy : IAuthorizationPolicy
@@ -81,3 +114,55 @@ internal sealed class AotPolicy : IAuthorizationPolicy
 
 [RequirePolicy("aot")]
 internal sealed record AotSmokeRequest;
+
+// ----------------------------------------------------------------------------
+// v2.1 fixtures — kept top-level (no nested types) so the Discovery walker
+// surfaces them under AOT publish (see Task 10).
+// ----------------------------------------------------------------------------
+
+[Policy("Premium")]
+internal sealed class AotPremiumPolicy : IAuthorizationPolicy
+{
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+        => new(UnitResult<AuthorizationFailure>.Success());
+}
+
+[Policy("Trusted")]
+internal sealed class AotTrustedPolicy : IAuthorizationPolicy
+{
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, CancellationToken ct = default)
+        => new(new AuthorizationFailure("trusted.no"));
+}
+
+[RequireAnyPolicy("Premium", "Trusted")]
+internal sealed record OrRequest;
+
+[Policy("MinAge")]
+internal sealed class AotMinAgePolicy : IAuthorizationPolicy<int>
+{
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, int minAge, CancellationToken ct = default)
+        => new(ctx is AotAgedContext aged && aged.Age >= minAge
+            ? UnitResult<AuthorizationFailure>.Success()
+            : new AuthorizationFailure("age.below", $"age {(ctx as AotAgedContext)?.Age} < {minAge}"));
+}
+
+[RequirePolicy("MinAge", 18)]
+internal sealed record MinAgeRequest;
+
+internal sealed class AotAgedContext : ISecurityContext
+{
+    public AotAgedContext(string id, int age)
+    {
+        Id = id;
+        Age = age;
+        Roles = new HashSet<string>();
+        Claims = new Dictionary<string, string>();
+    }
+    public string Id { get; }
+    public int Age { get; }
+    public IReadOnlySet<string> Roles { get; }
+    public IReadOnlyDictionary<string, string> Claims { get; }
+}

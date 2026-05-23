@@ -1,4 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
 using ZeroAlloc.Authorization;
+using ZeroAlloc.Authorization.Generated;
 using ZeroAlloc.TestHelpers;
 using ZeroAlloc.Results;
 
@@ -68,6 +70,31 @@ public class AllocationBudgetTests
         AllocationGate.AssertBudgetValueTask(0, 1000,
             () => policy.EvaluateAsync(AnonymousSecurityContext.Instance),
             "EvaluateAsync (deny anonymous)");
+    }
+
+    [Fact]
+    public void Parameterized_EvaluateAsync_Allocates_Within_Budget()
+    {
+        // v2.1: [RequirePolicy("MinAge", 18)] dispatch — the int arg is emitted as a
+        // literal in the generator output (no boxing, no object[]). Measured ~24 B/call
+        // on net10.0 Release: that's the ValueTask<UnitResult<...>> wrap returned by
+        // AuthorizerFor<T>.EvaluateAsync; the typed int `18` itself contributes 0 bytes.
+        // The 256 B/call budget leaves headroom for jitter while still catching a
+        // regression that boxes the typed arg (would add ~24 B per arg).
+        var services = new ServiceCollection();
+        services.AddZeroAllocAuthorization();
+        using var sp = services.BuildServiceProvider();
+        using var scope = sp.CreateScope();
+
+        var authorizer = scope.ServiceProvider
+            .GetRequiredService<AuthorizerFor<MinAgeProtectedRequest>>();
+        // Age >= 18 -> Success path: avoids the policy's in-failure string interpolation
+        // so the gate isolates the dispatch cost (DI handoff + ValueTask wrap).
+        var ctx = new AgedTestContext("alice", age: 21);
+
+        AllocationGate.AssertBudgetValueTask(256, 100,
+            () => authorizer.EvaluateAsync(ctx),
+            "[Parameterized] AuthorizerFor<MinAgeProtectedRequest>.EvaluateAsync (literal 18 dispatch)");
     }
 
     private static TestContext NewAdminContext()

@@ -48,4 +48,28 @@ internal static class Descriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor RequireAnyPolicySingleName = new(
+        id: "ZAUTH006",
+        title: "[RequireAnyPolicy] with a single policy name",
+        messageFormat: "[RequireAnyPolicy(\"{0}\")] on '{1}' lists a single policy — use [RequirePolicy(\"{0}\")] for clarity",
+        category: "ZeroAlloc.Authorization",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor RequirePolicyArgShapeMismatch = new(
+        id: "ZAUTH007",
+        title: "[RequirePolicy] argument shape doesn't match policy interface",
+        messageFormat: "[RequirePolicy(\"{0}\", ...)] on '{1}': {2}",
+        category: "ZeroAlloc.Authorization",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor PolicyImplementsMultipleVariants = new(
+        id: "ZAUTH008",
+        title: "[Policy] class implements multiple IAuthorizationPolicy variants",
+        messageFormat: "[Policy(\"{0}\")] class '{1}' implements multiple IAuthorizationPolicy variants ({2}); pick one or split into separately-named policies",
+        category: "ZeroAlloc.Authorization",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

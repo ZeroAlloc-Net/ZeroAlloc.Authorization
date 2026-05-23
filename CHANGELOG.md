@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.0.2...v2.1.0) (2026-05-23)
+
+
+### Features
+
+* v2.1 — OR composition + parameterized policies + resource-based authz ([#1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/1)+[#2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/2)+[#3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/3)) ([#28](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/28)) ([4aa90bc](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/4aa90bc403e2b842eca872aa597fb73d62e1a503))
+
+
+### Bug Fixes
+
+* **generator:** discovery walkers now process nested types ([#29](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/29)) ([c0dd1ee](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/c0dd1eec64ca923f95b159cf7c36ce64d8c4b4f8))
+
 ## [2.0.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.0.1...v2.0.2) (2026-05-22)
 
 

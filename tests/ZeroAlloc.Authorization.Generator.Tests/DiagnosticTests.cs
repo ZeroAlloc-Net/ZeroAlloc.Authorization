@@ -199,6 +199,95 @@ public sealed record Foo(int Id);
         Assert.DoesNotContain(diagnostics, d => d.Id == "ZAUTH001");
     }
 
+    [Fact]
+    public void ZAUTH006_FiresWhen_RequireAnyPolicy_HasSingleName()
+    {
+        var source = @"
+using ZeroAlloc.Authorization;
+namespace MyApp;
+
+[Policy(""Admin"")]
+public sealed class AdminPolicy : IAuthorizationPolicy
+{
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
+}
+
+[RequireAnyPolicy(""Admin"")]
+public sealed record Cmd();
+";
+        var diagnostics = RunGenerator(source);
+        Assert.Contains(diagnostics, d => string.Equals(d.Id, "ZAUTH006", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ZAUTH007_FiresWhen_RequirePolicyArgs_DontMatchPolicyArity()
+    {
+        var source = @"
+using ZeroAlloc.Authorization;
+namespace MyApp;
+
+[Policy(""MinAge"")]
+public sealed class MinAgePolicy : IAuthorizationPolicy<int>
+{
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, int a, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
+}
+
+[RequirePolicy(""MinAge"")]
+public sealed record Cmd();
+";
+        var diagnostics = RunGenerator(source);
+        Assert.Contains(diagnostics, d => string.Equals(d.Id, "ZAUTH007", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ZAUTH007_FiresWhen_RequirePolicyArg_TypeMismatch()
+    {
+        var source = @"
+using ZeroAlloc.Authorization;
+namespace MyApp;
+
+[Policy(""MinAge"")]
+public sealed class MinAgePolicy : IAuthorizationPolicy<int>
+{
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, int a, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
+}
+
+[RequirePolicy(""MinAge"", ""eighteen"")]
+public sealed record Cmd();
+";
+        var diagnostics = RunGenerator(source);
+        Assert.Contains(diagnostics, d => string.Equals(d.Id, "ZAUTH007", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ZAUTH008_FiresWhen_PolicyImplements_MultipleVariants()
+    {
+        var source = @"
+using ZeroAlloc.Authorization;
+namespace MyApp;
+
+[Policy(""Foo"")]
+public sealed class FooPolicy : IAuthorizationPolicy, IAuthorizationPolicy<int>
+{
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
+
+    public System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<AuthorizationFailure>> EvaluateAsync(
+        ISecurityContext ctx, int a, System.Threading.CancellationToken ct = default)
+        => new(ZeroAlloc.Results.UnitResult<AuthorizationFailure>.Success());
+}
+";
+        var diagnostics = RunGenerator(source);
+        Assert.Contains(diagnostics, d => string.Equals(d.Id, "ZAUTH008", StringComparison.Ordinal));
+    }
+
     private static ImmutableArray<Diagnostic> RunGenerator(string source)
     {
         var refs = GetStandardReferences();

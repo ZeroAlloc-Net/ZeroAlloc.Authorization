@@ -43,7 +43,11 @@ The package is the full stack — contract types **plus** a bundled Roslyn gener
 - Five contract types: `ISecurityContext`, `IAuthorizationPolicy`, `[Policy]`, `[RequirePolicy]`, `AnonymousSecurityContext`.
 - One dispatcher base: `AuthorizerFor<TRequest>` (abstract; the generator emits concrete subclasses).
 - One generator-emitted DI extension: `services.AddZeroAllocAuthorization()`.
-- Five compile-time diagnostics: `ZAUTH001`–`ZAUTH005`.
+- Eight compile-time diagnostics: `ZAUTH001`–`ZAUTH008`.
+- v2.1 extensions: `[RequireAnyPolicy]` (OR composition),
+  `IAuthorizationPolicy<T1...>` (parameterized policies, arity 1–3), and
+  `IResourceSecurityContext<TResource>` (resource-based authorization,
+  shipped dormant for host adoption).
 
 Hosts (AI.Sentinel, `ZeroAlloc.Mediator.Authorization` v5, your own dispatcher) build a per-request `ISecurityContext`, resolve `AuthorizerFor<TRequest>` from the DI container, call `EvaluateAsync`, and translate the resulting `UnitResult<AuthorizationFailure>` into their outcome shape (HTTP 403, typed exception, tool-call refusal).
 
@@ -61,8 +65,20 @@ If you need an integration that does not exist yet, write a host. The dispatch s
 - [Getting started](getting-started.md) — install, write your first policy, attach `[RequirePolicy]`.
 - [Policies](core-concepts/policies.md) — `IAuthorizationPolicy`, async-only contract, structured deny.
 - [Security context](core-concepts/security-context.md) — `ISecurityContext`, host-specific subinterfaces, the anonymous singleton.
-- [Attributes](attributes.md) — `[Policy]` and `[RequirePolicy]` reference.
+- [Attributes](attributes.md) — `[Policy]`, `[RequirePolicy]`, and `[RequireAnyPolicy]` reference.
 - [Host integration](guides/host-integration.md) — how the generator + DI extension fit together.
+
+### v2.1 core-concepts
+
+- [OR composition](core-concepts/or-composition.md) — `[RequireAnyPolicy]`, OR-group semantics, combined-failure shape (`any.all_failed`).
+- [Parameterized policies](core-concepts/parameterized-policies.md) — `IAuthorizationPolicy<T1...>` family + compile-time-constant args (arity cap 3).
+- [Resource-based authorization](core-concepts/resource-based-authorization.md) — `IResourceSecurityContext<TResource>`; shipped dormant in v2.1 pending host adoption.
+
+### Diagnostics
+
+- [`ZAUTH006`](diagnostics/ZAUTH006.md) — `[RequireAnyPolicy]` with a single policy name (Warning).
+- [`ZAUTH007`](diagnostics/ZAUTH007.md) — `[RequirePolicy]` argument shape doesn't match policy interface (Error).
+- [`ZAUTH008`](diagnostics/ZAUTH008.md) — `[Policy]` class implements multiple `IAuthorizationPolicy` variants (Error).
 
 ---
 

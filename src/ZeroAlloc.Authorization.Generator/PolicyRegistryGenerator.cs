@@ -36,7 +36,7 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         var counts = new Dictionary<string, int>(System.StringComparer.Ordinal);
         for (int i = 0; i < policies.Count; i++)
         {
-            var name = policies[i].Name;
+            var name = policies[i].PolicyName;
             counts.TryGetValue(name, out var c);
             counts[name] = c + 1;
         }
@@ -52,19 +52,23 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         var byName = new Dictionary<string, PolicyInfo>(System.StringComparer.Ordinal);
         for (int i = 0; i < policies.Count; i++)
         {
-            byName[policies[i].Name] = policies[i];
+            byName[policies[i].PolicyName] = policies[i];
         }
 
         // ZAUTH001: every [RequirePolicy] name must resolve to a known [Policy].
         for (int i = 0; i < requires.Count; i++)
         {
             var req = requires[i];
-            for (int j = 0; j < req.PolicyNames.Count; j++)
+            for (int g = 0; g < req.Groups.Count; g++)
             {
-                var name = req.PolicyNames[j];
-                if (!byName.ContainsKey(name))
+                var group = req.Groups[g];
+                for (int j = 0; j < group.PolicyNames.Count; j++)
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(Descriptors.UnknownPolicyName, Location.None, name));
+                    var name = group.PolicyNames[j];
+                    if (!byName.ContainsKey(name))
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(Descriptors.UnknownPolicyName, Location.None, name));
+                    }
                 }
             }
         }

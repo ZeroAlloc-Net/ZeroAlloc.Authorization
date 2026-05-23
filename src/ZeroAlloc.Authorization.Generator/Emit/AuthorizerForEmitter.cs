@@ -38,9 +38,17 @@ internal static class AuthorizerForEmitter
         sb.AppendLine("            global::ZeroAlloc.Authorization.ISecurityContext ctx,");
         sb.AppendLine("            global::System.Threading.CancellationToken ct = default)");
         sb.AppendLine("        {");
-        for (int i = 0; i < req.PolicyNames.Count; i++)
+        foreach (var group in req.Groups)
         {
-            var name = req.PolicyNames[i];
+            // For Task 5 we keep behaviour byte-identical to v2.0:
+            // - Kind=All with single name + no args -> emit existing sequential await + return-on-failure.
+            // - Kind=Any: NOT YET EMITTED (Task 7 handles).
+            // - Args (params object?[]): NOT YET EMITTED (Task 6 handles).
+            if (group.Kind != RequireGroupKind.All) continue; // Task 7
+            if (group.PolicyNames.Count != 1) continue;
+            if (group.Args[0] is not null) continue; // Task 6
+
+            var name = group.PolicyNames[0];
             if (!policiesByName.TryGetValue(name, out var policy)) continue; // ZAUTH001 will diagnose
             var local = Sanitize(name);
             // Type as IAuthorizationPolicy so the interface method dispatch is uniform across

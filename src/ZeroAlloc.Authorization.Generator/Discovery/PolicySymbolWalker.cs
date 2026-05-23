@@ -46,6 +46,15 @@ internal static class PolicySymbolWalker
         while (stack.Count > 0)
         {
             var current = stack.Pop();
+
+            // Nested types pushed via type.GetTypeMembers() are popped here as INamedTypeSymbol.
+            // The original walker only iterated their members; ProcessType was never called on the
+            // nested type itself. Without this, [Policy] on a nested class is silently ignored.
+            if (current is INamedTypeSymbol currentType)
+            {
+                ProcessType(currentType, policyAttr, policyInterfaces, sink, diagnostics);
+            }
+
             foreach (var member in current.GetMembers())
             {
                 if (member is INamespaceSymbol ns)

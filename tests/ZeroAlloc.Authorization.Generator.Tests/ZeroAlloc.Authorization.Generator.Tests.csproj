@@ -10,7 +10,7 @@
     <NoWarn>$(NoWarn);MA0048;MA0051;MA0047;MA0002;MA0004;MA0006</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
     <!-- Verify.SourceGenerators 2.x depends on Verify 26.x; the matching Verify.Xunit is 26.x. -->

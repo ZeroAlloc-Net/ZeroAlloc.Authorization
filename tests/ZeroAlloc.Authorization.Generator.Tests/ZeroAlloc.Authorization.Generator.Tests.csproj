@@ -10,20 +10,26 @@
     <NoWarn>$(NoWarn);MA0048;MA0051;MA0047;MA0002;MA0004;MA0006</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="ZeroAlloc.TestHelpers" Version="1.2.*" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
     <!-- Verify.SourceGenerators 2.x depends on Verify 26.x; the matching Verify.Xunit is 26.x. -->
-    <PackageReference Include="Verify.Xunit" Version="31.12.5" />
-    <PackageReference Include="Verify.SourceGenerators" Version="2.5.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
-    <Using Include="VerifyXunit" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\ZeroAlloc.Authorization\ZeroAlloc.Authorization.csproj" />
     <ProjectReference Include="..\..\src\ZeroAlloc.Authorization.Generator\ZeroAlloc.Authorization.Generator.csproj" />
   </ItemGroup>
+
+  <!-- Snapshots are data, not code. Verify's targets excluded them from compilation; without
+       that every .verified.cs is compiled and collides (CS0101). -->
+  <ItemGroup>
+    <Compile Remove="**/*.verified.*" />
+    <Compile Remove="**/*.received.*" />
+  </ItemGroup>
+
 </Project>

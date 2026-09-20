@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.0...v2.1.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* declare current sibling package versions ([#106](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/106)) ([bce3555](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/bce355523da1867ff6f37ae020b487baac82385b))
+
 ## [2.1.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.0.2...v2.1.0) (2026-05-23)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.1...v2.1.2) (2026-09-20)
+
+
+### Bug Fixes
+
+* stop the pack smoke test overwriting the build output ([#108](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/108)) ([563fdb6](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/563fdb6d25c9d93384e8a3c43d3424f38d4bb951))
+
 ## [2.1.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.0...v2.1.1) (2026-09-20)
 
 

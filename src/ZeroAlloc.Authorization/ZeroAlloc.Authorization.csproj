@@ -8,7 +8,7 @@
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="ZeroAlloc.Results" Version="0.1.4" />
+    <PackageReference Include="ZeroAlloc.Results" Version="1.2.2" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0">

@@ -3,12 +3,14 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
+using ZeroAlloc.TestHelpers;
+
 namespace ZeroAlloc.Authorization.Generator.Tests;
 
 public sealed class RequireAnyPolicyGeneratorTests
 {
     [Fact]
-    public Task OrGroup_TwoCandidates_GeneratesShortCircuitEval()
+    public void OrGroup_TwoCandidates_GeneratesShortCircuitEval()
     {
         const string source = @"
 using System.Threading;
@@ -37,11 +39,11 @@ public sealed class TrustedPolicy : IAuthorizationPolicy
 [RequireAnyPolicy(""Premium"", ""Trusted"")]
 public sealed record ViewBillingQuery();
 ";
-        return RunAndVerify(source);
+        RunAndVerify(source);
     }
 
     [Fact]
-    public Task MixedAndOr_AdminPlusAnyOfPremiumOrTrusted()
+    public void MixedAndOr_AdminPlusAnyOfPremiumOrTrusted()
     {
         const string source = @"
 using System.Threading;
@@ -79,7 +81,7 @@ public sealed class TrustedPolicy : IAuthorizationPolicy
 [RequireAnyPolicy(""Premium"", ""Trusted"")]
 public sealed record ViewBillingQuery();
 ";
-        return RunAndVerify(source);
+        RunAndVerify(source);
     }
 
     private static List<MetadataReference> GetStandardReferences()
@@ -97,7 +99,7 @@ public sealed record ViewBillingQuery();
         return references;
     }
 
-    private static Task RunAndVerify(string source)
+    private static void RunAndVerify(string source)
     {
         var references = GetStandardReferences();
 
@@ -109,6 +111,6 @@ public sealed record ViewBillingQuery();
 
         var generator = new PolicyRegistryGenerator().AsSourceGenerator();
         var driver = CSharpGeneratorDriver.Create(generator).RunGenerators(compilation);
-        return Verifier.Verify(driver).UseDirectory("Snapshots");
+        GeneratorSnapshot.Verify(driver);
     }
 }

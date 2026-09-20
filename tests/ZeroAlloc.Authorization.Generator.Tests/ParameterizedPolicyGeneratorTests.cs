@@ -3,12 +3,14 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
+using ZeroAlloc.TestHelpers;
+
 namespace ZeroAlloc.Authorization.Generator.Tests;
 
 public sealed class ParameterizedPolicyGeneratorTests
 {
     [Fact]
-    public Task SingleIntArg_GeneratesTypedDispatch()
+    public void SingleIntArg_GeneratesTypedDispatch()
     {
         const string source = @"
 using System.Threading;
@@ -29,11 +31,11 @@ public sealed class MinAgePolicy : IAuthorizationPolicy<int>
 [RequirePolicy(""MinAge"", 18)]
 public sealed record ApplyForLicenseCommand();
 ";
-        return RunAndVerify(source);
+        RunAndVerify(source);
     }
 
     [Fact]
-    public Task TwoArgs_StringAndInt_GeneratesTypedDispatch()
+    public void TwoArgs_StringAndInt_GeneratesTypedDispatch()
     {
         const string source = @"
 using System.Threading;
@@ -54,7 +56,7 @@ public sealed class PermissionPolicy : IAuthorizationPolicy<string, int>
 [RequirePolicy(""Permission"", ""read"", 42)]
 public sealed record ReadDocCommand();
 ";
-        return RunAndVerify(source);
+        RunAndVerify(source);
     }
 
     private static List<MetadataReference> GetStandardReferences()
@@ -72,7 +74,7 @@ public sealed record ReadDocCommand();
         return references;
     }
 
-    private static Task RunAndVerify(string source)
+    private static void RunAndVerify(string source)
     {
         var references = GetStandardReferences();
 
@@ -84,6 +86,6 @@ public sealed record ReadDocCommand();
 
         var generator = new PolicyRegistryGenerator().AsSourceGenerator();
         var driver = CSharpGeneratorDriver.Create(generator).RunGenerators(compilation);
-        return Verifier.Verify(driver).UseDirectory("Snapshots");
+        GeneratorSnapshot.Verify(driver);
     }
 }

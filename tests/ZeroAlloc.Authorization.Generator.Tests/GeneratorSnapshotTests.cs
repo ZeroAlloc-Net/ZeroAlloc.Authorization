@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
+using ZeroAlloc.TestHelpers;
+
 namespace ZeroAlloc.Authorization.Generator.Tests;
 
 public sealed class GeneratorSnapshotTests
@@ -28,13 +30,13 @@ public sealed record DeleteUser(int Id);
 ";
 
     [Fact]
-    public Task Basic_SinglePolicy_SingleRequirePolicy_Snapshot()
+    public void Basic_SinglePolicy_SingleRequirePolicy_Snapshot()
     {
-        return RunAndVerify(BasicSource);
+        RunAndVerify(BasicSource);
     }
 
     [Fact]
-    public async Task CrossAssembly_PolicyInReferencedAsm_RequireInSource_Snapshot()
+    public void CrossAssembly_PolicyInReferencedAsm_RequireInSource_Snapshot()
     {
         // Build a "SharedKernel" assembly that defines the policy
         const string libASource = @"
@@ -86,7 +88,7 @@ public sealed record DeleteUser(int Id);
 
         var generator = new PolicyRegistryGenerator().AsSourceGenerator();
         var driver = CSharpGeneratorDriver.Create(generator).RunGenerators(consumerCompilation);
-        await Verifier.Verify(driver).UseDirectory("Snapshots");
+        GeneratorSnapshot.Verify(driver);
     }
 
     private static List<MetadataReference> GetStandardReferences()
@@ -106,7 +108,7 @@ public sealed record DeleteUser(int Id);
         return references;
     }
 
-    private static Task RunAndVerify(string source)
+    private static void RunAndVerify(string source)
     {
         var references = GetStandardReferences();
 
@@ -118,6 +120,6 @@ public sealed record DeleteUser(int Id);
 
         var generator = new PolicyRegistryGenerator().AsSourceGenerator();
         var driver = CSharpGeneratorDriver.Create(generator).RunGenerators(compilation);
-        return Verifier.Verify(driver).UseDirectory("Snapshots");
+        GeneratorSnapshot.Verify(driver);
     }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.2...v2.1.3) (2026-09-20)
+
+
+### Bug Fixes
+
+* **ci:** pin the SDK floor at the .NET 10 GA band, not the newest patch ([#110](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/110)) ([db72964](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/db72964d69b2ae9026c20a335136a7c185c37cd6))
+
 ## [2.1.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.1...v2.1.2) (2026-09-20)
 
 

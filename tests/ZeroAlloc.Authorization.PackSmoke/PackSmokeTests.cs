@@ -15,6 +15,7 @@ public sealed class PackSmokeTests : IDisposable
     private readonly string _testVersion;
     private readonly string _workDir;
     private readonly string _feed;
+    private readonly string _artifacts;
 
     public PackSmokeTests()
     {
@@ -25,6 +26,12 @@ public sealed class PackSmokeTests : IDisposable
         _testVersion = $"9.9.9-packsmoke-{Guid.NewGuid():N}";
         _workDir = Path.Combine(Path.GetTempPath(), $"za-auth-packsmoke-{Guid.NewGuid():N}");
         _feed = Path.Combine(_workDir, "feed");
+        // Pack below rebuilds the real src projects. Without a private artifacts path it
+        // writes into the repository's own bin/obj, so a test that deliberately forces
+        // AssemblyVersion 9.9.9 leaves a 9.9.9-stamped assembly behind. The release
+        // workflow packs with --no-build straight after running the tests, which shipped
+        // that assembly to NuGet in 2.1.0 and 2.1.1.
+        _artifacts = Path.Combine(_workDir, "artifacts");
         Directory.CreateDirectory(_feed);
     }
 
@@ -119,7 +126,7 @@ public sealed class PackSmokeTests : IDisposable
     {
         var versionArg = assemblyVersion is null ? "" : $" -p:Version={assemblyVersion}";
         var result = RunDotnet(
-            $"pack \"{csproj}\" -c Release -p:PackageVersion={_testVersion}{versionArg} -o \"{_feed}\"",
+            $"pack \"{csproj}\" -c Release -p:PackageVersion={_testVersion}{versionArg} --artifacts-path \"{_artifacts}\" -o \"{_feed}\"",
             Environment.CurrentDirectory);
         Assert.True(result.ExitCode == 0, $"Pack failed for {csproj}:\n{result.StdOut}\n{result.StdErr}");
     }

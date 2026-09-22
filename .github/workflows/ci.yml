@@ -114,6 +114,3 @@ jobs:
 
   api-compat:
     uses: ZeroAlloc-Net/.github/.github/workflows/api-compat.yml@main
-    with:
-      package-id: ZeroAlloc.Authorization
-      csproj-path: src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj

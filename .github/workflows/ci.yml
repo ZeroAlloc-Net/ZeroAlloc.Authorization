@@ -59,7 +59,10 @@ jobs:
         run: dotnet restore ZeroAlloc.Authorization.slnx
 
       - name: Build
-        run: dotnet build ZeroAlloc.Authorization.slnx --configuration Release --no-restore
+        # The version goes to the build, not only to pack: pack runs --no-build, so the
+        # assemblies it packs carry whatever version this step stamped. Without it the
+        # CI packages claimed the fallback 1.0.0. See ZeroAlloc-Net/.github#36.
+        run: dotnet build ZeroAlloc.Authorization.slnx --configuration Release --no-restore -p:Version=${{ steps.gitversion.outputs.semver }}
 
       - name: Test
         run: dotnet test ZeroAlloc.Authorization.slnx --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
@@ -72,7 +75,7 @@ jobs:
           path: "**/*.trx"
 
       - name: Pack (verify)
-        run: dotnet pack ZeroAlloc.Authorization.slnx --configuration Release --no-build --output ./artifacts
+        run: dotnet pack ZeroAlloc.Authorization.slnx --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.gitversion.outputs.semver }}
 
       - name: Upload NuGet artifact
         uses: actions/upload-artifact@v7

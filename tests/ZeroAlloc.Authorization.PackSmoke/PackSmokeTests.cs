@@ -84,14 +84,18 @@ public sealed class PackSmokeTests : IDisposable
         // would have won.
         var repoRoot = LocateRepoRoot();
 
-        // Force a high AssemblyVersion on the bundled DLL (via main package)
-        // and a low one on the standalone Generator. Reproduces production.
-        PackProject(Path.Combine(repoRoot, "src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj"),
-                    assemblyVersion: "9.9.9");
+        // A high AssemblyVersion on the bundled DLL, via the main package at 9.9.9, and a
+        // low one on the standalone Generator package at 1.0.0. Pack now refuses a package
+        // whose assembly does not carry the package version, ZeroAlloc-Net/.github#36, so
+        // the two packages get different versions instead of one version with mismatched
+        // assemblies. The consumer references each at its own version, which is the same
+        // conflict production hit: a consumer holding packages from different releases.
+        var generatorVersion = $"1.0.0-packsmoke-{Guid.NewGuid():N}";
+        PackProject(Path.Combine(repoRoot, "src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj"));
         PackProject(Path.Combine(repoRoot, "src/ZeroAlloc.Authorization.Generator/ZeroAlloc.Authorization.Generator.csproj"),
-                    assemblyVersion: "1.0.0");
+                    generatorVersion);
 
-        ScaffoldTemplate(useStandaloneGenerator: true);
+        ScaffoldTemplate(useStandaloneGenerator: true, generatorVersion);
 
         var apiCsproj = Path.Combine(_workDir, "src/TestApp.Api/TestApp.Api.csproj");
         var build = RunDotnet($"build \"{apiCsproj}\" -c Release", _workDir);
@@ -120,19 +124,21 @@ public sealed class PackSmokeTests : IDisposable
     }
 
     private void PackProject(string csproj)
-        => PackProject(csproj, assemblyVersion: null);
+        => PackProject(csproj, _testVersion);
 
-    private void PackProject(string csproj, string? assemblyVersion)
+    private void PackProject(string csproj, string version)
     {
-        var versionArg = assemblyVersion is null ? "" : $" -p:Version={assemblyVersion}";
+        // -p:Version, not -p:PackageVersion: it stamps the assemblies with the package
+        // version too, which pack requires. See ZeroAlloc-Net/.github#36.
         var result = RunDotnet(
-            $"pack \"{csproj}\" -c Release -p:PackageVersion={_testVersion}{versionArg} --artifacts-path \"{_artifacts}\" -o \"{_feed}\"",
+            $"pack \"{csproj}\" -c Release -p:Version={version} --artifacts-path \"{_artifacts}\" -o \"{_feed}\"",
             Environment.CurrentDirectory);
         Assert.True(result.ExitCode == 0, $"Pack failed for {csproj}:\n{result.StdOut}\n{result.StdErr}");
     }
 
-    private void ScaffoldTemplate(bool useStandaloneGenerator)
+    private void ScaffoldTemplate(bool useStandaloneGenerator, string? generatorVersion = null)
     {
+        generatorVersion ??= _testVersion;
         var src = Path.Combine(_workDir, "src");
         Directory.CreateDirectory(src);
 
@@ -177,7 +183,7 @@ public sealed class PackSmokeTests : IDisposable
         // Generator package's buildTransitive guard and filters the analyzer
         // out because Api does not set ZeroAllocAuthorizationOwnsPolicies.
         var generatorRef = useStandaloneGenerator
-            ? $"""<PackageReference Include="ZeroAlloc.Authorization.Generator" Version="{_testVersion}" />"""
+            ? $"""<PackageReference Include="ZeroAlloc.Authorization.Generator" Version="{generatorVersion}" />"""
             : "";
         var ownsPoliciesProperty = useStandaloneGenerator
             ? "<ZeroAllocAuthorizationOwnsPolicies>true</ZeroAllocAuthorizationOwnsPolicies>"

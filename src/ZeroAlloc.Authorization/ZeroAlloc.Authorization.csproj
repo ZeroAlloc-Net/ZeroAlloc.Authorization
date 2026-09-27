@@ -39,9 +39,20 @@
           PackagePath="buildTransitive\ZeroAlloc.Authorization.targets" />
   </ItemGroup>
 
+  <!--
+    Bundle the generator DLL the build actually produced. Asking the generator project for its
+    target path, instead of hardcoding bin\$(Configuration)\netstandard2.0, follows any output
+    redirection such as artifacts-path. The hardcoded path silently bundled whatever stale DLL
+    sat in the repository's bin folder, at whatever version that DLL had been built with.
+  -->
   <Target Name="IncludeGeneratorInPackage" BeforeTargets="_GetPackageFiles">
+    <MSBuild Projects="..\ZeroAlloc.Authorization.Generator\ZeroAlloc.Authorization.Generator.csproj"
+             Targets="GetTargetPath"
+             RemoveProperties="TargetFramework;RuntimeIdentifier;SelfContained">
+      <Output TaskParameter="TargetOutputs" ItemName="_ZeroAllocAuthorizationGeneratorAssembly" />
+    </MSBuild>
     <ItemGroup>
-      <None Include="$(MSBuildThisFileDirectory)..\ZeroAlloc.Authorization.Generator\bin\$(Configuration)\netstandard2.0\ZeroAlloc.Authorization.Generator.dll"
+      <None Include="@(_ZeroAllocAuthorizationGeneratorAssembly)"
             Pack="true"
             PackagePath="analyzers/dotnet/cs"
             Visible="false" />

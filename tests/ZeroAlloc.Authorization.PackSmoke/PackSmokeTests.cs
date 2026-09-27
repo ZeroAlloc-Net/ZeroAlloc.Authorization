@@ -41,13 +41,13 @@ public sealed class PackSmokeTests : IDisposable
         {
             Directory.Delete(_workDir, recursive: true);
         }
-#pragma warning disable CA1031, ERP022, RCS1075 // best-effort cleanup: swallow any IO error
+#pragma warning disable CA1031, RCS1075 // best-effort cleanup: swallow any IO error
         catch (Exception ex)
         {
             // Best-effort cleanup; ignore failures (locked files, already gone, etc.).
             Debug.WriteLine($"PackSmoke cleanup failed: {ex}");
         }
-#pragma warning restore CA1031, ERP022, RCS1075
+#pragma warning restore CA1031, RCS1075
     }
 
     [Fact]

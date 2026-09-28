@@ -1,4 +1,8 @@
 #nullable enable
+abstract ZeroAlloc.Authorization.AuthorizerFor<TRequest>.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>
+const ZeroAlloc.Authorization.AnonymousSecurityContext.AnonymousId = "anonymous" -> string!
+const ZeroAlloc.Authorization.AuthorizationFailure.DefaultDenyCode = "policy.deny" -> string!
+static readonly ZeroAlloc.Authorization.AnonymousSecurityContext.Instance -> ZeroAlloc.Authorization.AnonymousSecurityContext!
 ZeroAlloc.Authorization.AnonymousSecurityContext
 ZeroAlloc.Authorization.AnonymousSecurityContext.Claims.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
 ZeroAlloc.Authorization.AnonymousSecurityContext.Id.get -> string!
@@ -12,6 +16,14 @@ ZeroAlloc.Authorization.AuthorizerFor<TRequest>
 ZeroAlloc.Authorization.AuthorizerFor<TRequest>.AuthorizerFor() -> void
 ZeroAlloc.Authorization.IAuthorizationPolicy
 ZeroAlloc.Authorization.IAuthorizationPolicy.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>
+ZeroAlloc.Authorization.IAuthorizationPolicy<T1, T2, T3>
+ZeroAlloc.Authorization.IAuthorizationPolicy<T1, T2, T3>.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, T1 arg1, T2 arg2, T3 arg3, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>
+ZeroAlloc.Authorization.IAuthorizationPolicy<T1, T2>
+ZeroAlloc.Authorization.IAuthorizationPolicy<T1, T2>.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, T1 arg1, T2 arg2, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>
+ZeroAlloc.Authorization.IAuthorizationPolicy<T1>
+ZeroAlloc.Authorization.IAuthorizationPolicy<T1>.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, T1 arg1, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>
+ZeroAlloc.Authorization.IResourceSecurityContext<TResource>
+ZeroAlloc.Authorization.IResourceSecurityContext<TResource>.Resource.get -> TResource
 ZeroAlloc.Authorization.ISecurityContext
 ZeroAlloc.Authorization.ISecurityContext.Claims.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
 ZeroAlloc.Authorization.ISecurityContext.Id.get -> string!
@@ -19,10 +31,11 @@ ZeroAlloc.Authorization.ISecurityContext.Roles.get -> System.Collections.Generic
 ZeroAlloc.Authorization.PolicyAttribute
 ZeroAlloc.Authorization.PolicyAttribute.Name.get -> string!
 ZeroAlloc.Authorization.PolicyAttribute.PolicyAttribute(string! name) -> void
+ZeroAlloc.Authorization.RequireAnyPolicyAttribute
+ZeroAlloc.Authorization.RequireAnyPolicyAttribute.PolicyNames.get -> string![]!
+ZeroAlloc.Authorization.RequireAnyPolicyAttribute.RequireAnyPolicyAttribute(params string![]! policyNames) -> void
 ZeroAlloc.Authorization.RequirePolicyAttribute
+ZeroAlloc.Authorization.RequirePolicyAttribute.PolicyArgs.get -> object?[]?
 ZeroAlloc.Authorization.RequirePolicyAttribute.PolicyName.get -> string!
 ZeroAlloc.Authorization.RequirePolicyAttribute.RequirePolicyAttribute(string! policyName) -> void
-abstract ZeroAlloc.Authorization.AuthorizerFor<TRequest>.EvaluateAsync(ZeroAlloc.Authorization.ISecurityContext! ctx, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<ZeroAlloc.Results.UnitResult<ZeroAlloc.Authorization.AuthorizationFailure>>
-const ZeroAlloc.Authorization.AnonymousSecurityContext.AnonymousId = "anonymous" -> string!
-const ZeroAlloc.Authorization.AuthorizationFailure.DefaultDenyCode = "policy.deny" -> string!
-static readonly ZeroAlloc.Authorization.AnonymousSecurityContext.Instance -> ZeroAlloc.Authorization.AnonymousSecurityContext!
+ZeroAlloc.Authorization.RequirePolicyAttribute.RequirePolicyAttribute(string! policyName, params object?[]! args) -> void

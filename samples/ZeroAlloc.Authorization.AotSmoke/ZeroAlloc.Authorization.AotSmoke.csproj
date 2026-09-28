@@ -28,11 +28,13 @@
     <!-- Direct analyzer wiring so the generator runs for this sample. The
          ZeroAlloc.Authorization project references the generator with
          PrivateAssets="all", which intentionally hides the analyzer from
-         downstream consumers — we re-attach it here as a built DLL (NOT a
-         ProjectReference) because ProjectReference makes MSBuild evaluate the
-         generator's netstandard2.0 TargetFramework during AOT publish, which
-         fails NETSDK1207. The generator is built transitively via the
-         ZeroAlloc.Authorization ProjectReference above. -->
-    <Analyzer Include="..\..\src\ZeroAlloc.Authorization.Generator\bin\$(Configuration)\netstandard2.0\ZeroAlloc.Authorization.Generator.dll" />
+         downstream consumers, so it is re-attached here. The ProjectReference
+         resolves the DLL the build actually produced; a hard-coded bin path missed
+         any output redirection such as artifacts-path and loaded a stale DLL, or
+         none at all. See ZeroAlloc-Net/.github#43. PublishAot is set in this file,
+         not passed globally, so it does not reach the netstandard2.0 generator. -->
+    <ProjectReference Include="..\..\src\ZeroAlloc.Authorization.Generator\ZeroAlloc.Authorization.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

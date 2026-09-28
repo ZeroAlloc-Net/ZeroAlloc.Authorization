@@ -25,7 +25,11 @@
          which intentionally hides it from downstream consumers (so consumers don't
          pick it up via ProjectReference propagation). Tests that exercise the
          generated DI-registration + AuthorizerFor<T> need it re-attached here.
-         The generator is built transitively via the ProjectReference above. -->
-    <Analyzer Include="..\..\src\ZeroAlloc.Authorization.Generator\bin\$(Configuration)\netstandard2.0\ZeroAlloc.Authorization.Generator.dll" />
+         A ProjectReference resolves the DLL the build actually produced; a hard-coded
+         bin path missed any output redirection such as artifacts-path and loaded a stale
+         DLL, or none at all. See ZeroAlloc-Net/.github#43. -->
+    <ProjectReference Include="..\..\src\ZeroAlloc.Authorization.Generator\ZeroAlloc.Authorization.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

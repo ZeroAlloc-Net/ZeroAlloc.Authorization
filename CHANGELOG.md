@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.4](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.3...v2.1.4) (2026-09-28)
+
+
+### Bug Fixes
+
+* mark released analyzer rules and public api as shipped and automate the move ([#126](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/126)) ([11942ba](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/11942ba130b45e37cbad1e511e0b7e5483a9c00b))
+* report ZAUTH diagnostics at the class or attribute they are about ([#129](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/129)) ([c2e40ac](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/c2e40acd0de18f35ae7e445664c8a0ec62a48727))
+
 ## [2.1.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.2...v2.1.3) (2026-09-20)
 
 

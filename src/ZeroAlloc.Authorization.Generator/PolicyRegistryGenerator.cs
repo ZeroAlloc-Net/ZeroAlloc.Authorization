@@ -48,22 +48,43 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         }
     }
 
-    // ZAUTH002: detect duplicate [Policy] names before building byName.
+    // ZAUTH002: detect duplicate [Policy] names before building byName. Reported once per name, at
+    // the later [Policy] attribute in this compilation, with the others here as additional
+    // locations. A clash between referenced assemblies only has no location in this compilation.
     private static void ReportDuplicatePolicyNames(SourceProductionContext spc, IReadOnlyList<PolicyInfo> policies)
     {
-        var counts = new Dictionary<string, int>(System.StringComparer.Ordinal);
+        var byName = new Dictionary<string, List<PolicyInfo>>(System.StringComparer.Ordinal);
+        var names = new List<string>();
         for (int i = 0; i < policies.Count; i++)
         {
             var name = policies[i].PolicyName;
-            counts.TryGetValue(name, out var c);
-            counts[name] = c + 1;
-        }
-        foreach (var kvp in counts)
-        {
-            if (kvp.Value > 1)
+            if (!byName.TryGetValue(name, out var same))
             {
-                spc.ReportDiagnostic(Diagnostic.Create(Descriptors.DuplicatePolicyName, Location.None, kvp.Key));
+                same = new List<PolicyInfo>();
+                byName.Add(name, same);
+                names.Add(name);
             }
+            same.Add(policies[i]);
+        }
+        foreach (var name in names)
+        {
+            var same = byName[name];
+            if (same.Count < 2) continue;
+
+            var located = new List<Location>(same.Count);
+            foreach (var policy in same)
+            {
+                if (policy.AttributeLocation.IsInSource) located.Add(policy.AttributeLocation);
+            }
+            located.Sort(SourceLocations.Compare);
+
+            var primary = Location.None;
+            if (located.Count > 0)
+            {
+                primary = located[located.Count - 1];
+                located.RemoveAt(located.Count - 1);
+            }
+            spc.ReportDiagnostic(Diagnostic.Create(Descriptors.DuplicatePolicyName, primary, located, name));
         }
     }
 
@@ -78,7 +99,8 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         return byName;
     }
 
-    // ZAUTH001: every [RequirePolicy] name must resolve to a known [Policy].
+    // ZAUTH001: every [RequirePolicy] name must resolve to a known [Policy]. At the attribute that
+    // names it.
     private static void ReportUnknownPolicyReferences(
         SourceProductionContext spc,
         IReadOnlyList<RequireInfo> requires,
@@ -95,7 +117,7 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
                     var name = group.PolicyNames[j];
                     if (!byName.ContainsKey(name))
                     {
-                        spc.ReportDiagnostic(Diagnostic.Create(Descriptors.UnknownPolicyName, Location.None, name));
+                        spc.ReportDiagnostic(Diagnostic.Create(Descriptors.UnknownPolicyName, group.AttributeLocation, name));
                     }
                 }
             }

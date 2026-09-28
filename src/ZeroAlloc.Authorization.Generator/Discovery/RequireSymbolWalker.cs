@@ -18,20 +18,23 @@ internal static class RequireSymbolWalker
 
         var results = new List<RequireInfo>();
         var diagnostics = new List<Diagnostic>();
-        WalkNamespace(compilation.SourceModule.GlobalNamespace, requireAttr, requireAnyAttr, results, diagnostics);
+        var context = new WalkContext(compilation, requireAttr, requireAnyAttr, results, diagnostics);
+        WalkNamespace(compilation.SourceModule.GlobalNamespace, context);
         foreach (var refAsm in compilation.SourceModule.ReferencedAssemblySymbols)
         {
-            WalkNamespace(refAsm.GlobalNamespace, requireAttr, requireAnyAttr, results, diagnostics);
+            WalkNamespace(refAsm.GlobalNamespace, context);
         }
         return new RequireWalkResult(results, diagnostics);
     }
 
-    private static void WalkNamespace(
-        INamespaceOrTypeSymbol root,
-        INamedTypeSymbol requireAttr,
-        INamedTypeSymbol? requireAnyAttr,
-        List<RequireInfo> sink,
-        List<Diagnostic> diagnostics)
+    private sealed record WalkContext(
+        Compilation Compilation,
+        INamedTypeSymbol RequireAttr,
+        INamedTypeSymbol? RequireAnyAttr,
+        List<RequireInfo> Sink,
+        List<Diagnostic> Diagnostics);
+
+    private static void WalkNamespace(INamespaceOrTypeSymbol root, WalkContext context)
     {
         var stack = new Stack<INamespaceOrTypeSymbol>();
         stack.Push(root);
@@ -44,7 +47,7 @@ internal static class RequireSymbolWalker
             // nested type itself. Without this, [RequirePolicy] on a nested class is silently ignored.
             if (current is INamedTypeSymbol currentType)
             {
-                ProcessType(currentType, requireAttr, requireAnyAttr, sink, diagnostics);
+                ProcessType(currentType, context);
             }
 
             foreach (var member in current.GetMembers())
@@ -56,30 +59,25 @@ internal static class RequireSymbolWalker
                 else if (member is INamedTypeSymbol type)
                 {
                     foreach (var nested in type.GetTypeMembers()) stack.Push(nested);
-                    ProcessType(type, requireAttr, requireAnyAttr, sink, diagnostics);
+                    ProcessType(type, context);
                 }
             }
         }
     }
 
-    private static void ProcessType(
-        INamedTypeSymbol type,
-        INamedTypeSymbol requireAttr,
-        INamedTypeSymbol? requireAnyAttr,
-        List<RequireInfo> sink,
-        List<Diagnostic> diagnostics)
+    private static void ProcessType(INamedTypeSymbol type, WalkContext context)
     {
         List<RequireGroup>? groups = null;
 
         foreach (var a in type.GetAttributes())
         {
-            if (SymbolEqualityComparer.Default.Equals(a.AttributeClass, requireAttr))
+            if (SymbolEqualityComparer.Default.Equals(a.AttributeClass, context.RequireAttr))
             {
-                TryAddRequireGroup(a, ref groups);
+                TryAddRequireGroup(a, context.Compilation, ref groups);
             }
-            else if (requireAnyAttr is not null && SymbolEqualityComparer.Default.Equals(a.AttributeClass, requireAnyAttr))
+            else if (context.RequireAnyAttr is not null && SymbolEqualityComparer.Default.Equals(a.AttributeClass, context.RequireAnyAttr))
             {
-                TryAddRequireAnyGroup(a, type, ref groups, diagnostics);
+                TryAddRequireAnyGroup(a, type, context.Compilation, ref groups, context.Diagnostics);
             }
         }
 
@@ -89,11 +87,12 @@ internal static class RequireSymbolWalker
 
         // ZAUTH005 (defensive): the [RequirePolicy] AttributeTargets restriction already
         // blocks interface/enum/delegate targets at the compiler. This is belt-and-suspenders.
+        // At the type identifier.
         if (type.TypeKind != TypeKind.Class && type.TypeKind != TypeKind.Struct)
         {
-            diagnostics.Add(Diagnostic.Create(
+            context.Diagnostics.Add(Diagnostic.Create(
                 Descriptors.RequirePolicyInvalidTarget,
-                Location.None,
+                SourceLocations.Of(type, context.Compilation),
                 fqn,
                 type.TypeKind.ToString().ToLowerInvariant()));
             return;
@@ -102,10 +101,10 @@ internal static class RequireSymbolWalker
         var unqualified = type.ToDisplayString(new SymbolDisplayFormat(
             typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces));
         var safe = SanitizeIdentifier(unqualified);
-        sink.Add(new RequireInfo(fqn, safe, groups));
+        context.Sink.Add(new RequireInfo(fqn, safe, groups));
     }
 
-    private static void TryAddRequireGroup(AttributeData a, ref List<RequireGroup>? groups)
+    private static void TryAddRequireGroup(AttributeData a, Compilation compilation, ref List<RequireGroup>? groups)
     {
         if (a.ConstructorArguments.Length == 0) return;
         if (a.ConstructorArguments[0].Value is not string name || string.IsNullOrEmpty(name)) return;
@@ -121,15 +120,17 @@ internal static class RequireSymbolWalker
             RequireGroupKind.All,
             new[] { name },
             new IReadOnlyList<TypedConstant>?[] { argList },
-            a.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? Location.None));
+            SourceLocations.Of(a, compilation)));
     }
 
     private static void TryAddRequireAnyGroup(
         AttributeData a,
         INamedTypeSymbol type,
+        Compilation compilation,
         ref List<RequireGroup>? groups,
         List<Diagnostic> diagnostics)
     {
+        var attributeLocation = SourceLocations.Of(a, compilation);
         if (a.ConstructorArguments.Length == 0) return;
         if (a.ConstructorArguments[0].Kind != TypedConstantKind.Array) return;
         var nameValues = a.ConstructorArguments[0].Values;
@@ -145,7 +146,7 @@ internal static class RequireSymbolWalker
         {
             diagnostics.Add(Diagnostic.Create(
                 Descriptors.RequireAnyPolicySingleName,
-                a.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? Location.None,
+                attributeLocation,
                 names[0], type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
         }
 
@@ -155,7 +156,7 @@ internal static class RequireSymbolWalker
             RequireGroupKind.Any,
             names,
             argsPerName,
-            a.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? Location.None));
+            attributeLocation));
     }
 
     private static string SanitizeIdentifier(string s)

@@ -26,20 +26,23 @@ internal static class PolicySymbolWalker
 
         var results = new List<PolicyInfo>();
         var diagnostics = new List<Diagnostic>();
-        WalkNamespace(compilation.SourceModule.GlobalNamespace, policyAttr, policyInterfaces, results, diagnostics);
+        var context = new WalkContext(compilation, policyAttr, policyInterfaces, results, diagnostics);
+        WalkNamespace(compilation.SourceModule.GlobalNamespace, context);
         foreach (var refAsm in compilation.SourceModule.ReferencedAssemblySymbols)
         {
-            WalkNamespace(refAsm.GlobalNamespace, policyAttr, policyInterfaces, results, diagnostics);
+            WalkNamespace(refAsm.GlobalNamespace, context);
         }
         return new PolicyWalkResult(results, diagnostics);
     }
 
-    private static void WalkNamespace(
-        INamespaceOrTypeSymbol root,
-        INamedTypeSymbol policyAttr,
-        INamedTypeSymbol?[] policyInterfaces,
-        List<PolicyInfo> sink,
-        List<Diagnostic> diagnostics)
+    private sealed record WalkContext(
+        Compilation Compilation,
+        INamedTypeSymbol PolicyAttr,
+        INamedTypeSymbol?[] PolicyInterfaces,
+        List<PolicyInfo> Sink,
+        List<Diagnostic> Diagnostics);
+
+    private static void WalkNamespace(INamespaceOrTypeSymbol root, WalkContext context)
     {
         var stack = new Stack<INamespaceOrTypeSymbol>();
         stack.Push(root);
@@ -52,7 +55,7 @@ internal static class PolicySymbolWalker
             // nested type itself. Without this, [Policy] on a nested class is silently ignored.
             if (current is INamedTypeSymbol currentType)
             {
-                ProcessType(currentType, policyAttr, policyInterfaces, sink, diagnostics);
+                ProcessType(currentType, context);
             }
 
             foreach (var member in current.GetMembers())
@@ -64,7 +67,7 @@ internal static class PolicySymbolWalker
                 else if (member is INamedTypeSymbol type)
                 {
                     foreach (var nested in type.GetTypeMembers()) stack.Push(nested);
-                    ProcessType(type, policyAttr, policyInterfaces, sink, diagnostics);
+                    ProcessType(type, context);
                 }
             }
         }
@@ -106,36 +109,35 @@ internal static class PolicySymbolWalker
         return new InterfaceMatch(implParameterless, implGeneric, implGenericArity, implVariantsCount, implVariantsLabel.ToString());
     }
 
-    private static void ProcessType(
-        INamedTypeSymbol type,
-        INamedTypeSymbol policyAttr,
-        INamedTypeSymbol?[] policyInterfaces,
-        List<PolicyInfo> sink,
-        List<Diagnostic> diagnostics)
+    private static AttributeData? FindPolicyAttribute(INamedTypeSymbol type, INamedTypeSymbol policyAttr)
     {
-        AttributeData? policyAttribute = null;
         foreach (var a in type.GetAttributes())
         {
-            if (SymbolEqualityComparer.Default.Equals(a.AttributeClass, policyAttr))
-            {
-                policyAttribute = a;
-                break;
-            }
+            if (SymbolEqualityComparer.Default.Equals(a.AttributeClass, policyAttr)) return a;
         }
+        return null;
+    }
+
+    // ZAUTH003, ZAUTH004 and ZAUTH008 are about the class, and are reported at its identifier.
+    private static void ProcessType(INamedTypeSymbol type, WalkContext context)
+    {
+        var diagnostics = context.Diagnostics;
+        var policyAttribute = FindPolicyAttribute(type, context.PolicyAttr);
         if (policyAttribute is null) return;
         if (policyAttribute.ConstructorArguments.Length == 0) return;
         var nameArg = policyAttribute.ConstructorArguments[0];
         if (nameArg.Value is not string policyName) return;
 
         var fqn = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var match = FindPolicyInterfaces(type, policyInterfaces);
+        var match = FindPolicyInterfaces(type, context.PolicyInterfaces);
+        var typeLocation = SourceLocations.Of(type, context.Compilation);
 
         // ZAUTH003: [Policy] class must implement IAuthorizationPolicy (any variant).
         if (match.VariantsCount == 0)
         {
             diagnostics.Add(Diagnostic.Create(
                 Descriptors.PolicyDoesNotImplementInterface,
-                Location.None,
+                typeLocation,
                 fqn));
             return;
         }
@@ -145,7 +147,7 @@ internal static class PolicySymbolWalker
         {
             diagnostics.Add(Diagnostic.Create(
                 Descriptors.PolicyImplementsMultipleVariants,
-                type.Locations.Length > 0 ? type.Locations[0] : Location.None,
+                typeLocation,
                 policyName,
                 fqn,
                 match.VariantsLabel));
@@ -158,7 +160,7 @@ internal static class PolicySymbolWalker
             // ZAUTH004: [Policy] class is abstract/static — DI cannot construct it.
             diagnostics.Add(Diagnostic.Create(
                 Descriptors.PolicyNotInstantiable,
-                Location.None,
+                typeLocation,
                 fqn));
         }
 
@@ -166,11 +168,12 @@ internal static class PolicySymbolWalker
         var typeArgs = resolved.TypeArguments;
         var arity = match.Parameterless is not null ? 0 : match.GenericArity;
 
-        sink.Add(new PolicyInfo(
+        context.Sink.Add(new PolicyInfo(
             fqn,
             policyName,
             arity,
             typeArgs.ToArray(),
-            instantiable));
+            instantiable,
+            SourceLocations.Of(policyAttribute, context.Compilation)));
     }
 }

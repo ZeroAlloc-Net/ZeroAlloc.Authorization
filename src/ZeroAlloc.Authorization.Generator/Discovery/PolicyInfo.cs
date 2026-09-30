@@ -1,5 +1,4 @@
-using System.Collections.Generic;
-using Microsoft.CodeAnalysis;
+using ZeroAlloc.Authorization.Generator.Diagnostics;
 
 namespace ZeroAlloc.Authorization.Generator.Discovery;
 
@@ -9,12 +8,13 @@ namespace ZeroAlloc.Authorization.Generator.Discovery;
 /// from the implemented interface. <see cref="IsInstantiable"/> is preserved
 /// to keep ZAUTH004 abstract/static skip-emit behaviour byte-identical.
 /// <see cref="AttributeLocation"/> is the [Policy] attribute, where ZAUTH002 reports a clash, or
-/// <see cref="Location.None"/> for a policy declared outside this compilation.
+/// null for a policy declared outside this compilation and in the models the source is emitted
+/// from.
 /// </summary>
 internal sealed record PolicyInfo(
     string FullyQualifiedTypeName,
     string PolicyName,
     int Arity,
-    IReadOnlyList<ITypeSymbol> TypeArgs,
+    EquatableArray<TypeRef> TypeArgs,
     bool IsInstantiable,
-    Location AttributeLocation);
+    LocationInfo? AttributeLocation);

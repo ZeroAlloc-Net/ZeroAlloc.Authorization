@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 using ZeroAlloc.Authorization.Generator.Diagnostics;
 
@@ -7,67 +8,57 @@ namespace ZeroAlloc.Authorization.Generator.Discovery;
 
 internal static class RequireSymbolWalker
 {
-    private const string RequirePolicyAttributeFullName    = "ZeroAlloc.Authorization.RequirePolicyAttribute";
-    private const string RequireAnyPolicyAttributeFullName = "ZeroAlloc.Authorization.RequireAnyPolicyAttribute";
+    public const string RequirePolicyAttributeFullName    = "ZeroAlloc.Authorization.RequirePolicyAttribute";
+    public const string RequireAnyPolicyAttributeFullName = "ZeroAlloc.Authorization.RequireAnyPolicyAttribute";
 
-    public static RequireWalkResult Find(Compilation compilation)
+    /// <summary>
+    /// The request on one type of this compilation, or null when it carries no [Require...].
+    /// All of the type's [RequirePolicy] and [RequireAnyPolicy] attributes are read, in order,
+    /// whichever of them found the type.
+    /// </summary>
+    public static RequireDiscovery? Discover(ISymbol symbol, Compilation compilation)
     {
-        var requireAttr    = compilation.GetTypeByMetadataName(RequirePolicyAttributeFullName);
-        var requireAnyAttr = compilation.GetTypeByMetadataName(RequireAnyPolicyAttributeFullName);
-        if (requireAttr is null) return new RequireWalkResult(System.Array.Empty<RequireInfo>(), System.Array.Empty<Diagnostic>());
+        if (symbol is not INamedTypeSymbol type) return null;
+        var context = WalkContext.Create(compilation);
+        return context is null ? null : ProcessType(type, context);
+    }
 
-        var results = new List<RequireInfo>();
-        var diagnostics = new List<Diagnostic>();
-        var context = new WalkContext(compilation, requireAttr, requireAnyAttr, results, diagnostics);
-        WalkNamespace(compilation.SourceModule.GlobalNamespace, context);
+    /// <summary>
+    /// The requests declared in the compilation's referenced assemblies, in walk order.
+    /// </summary>
+    public static EquatableArray<RequireDiscovery> FindInReferences(Compilation compilation, CancellationToken ct)
+    {
+        var context = WalkContext.Create(compilation);
+        if (context is null) return EquatableArray<RequireDiscovery>.Empty;
+
+        var results = new List<RequireDiscovery>();
         foreach (var refAsm in compilation.SourceModule.ReferencedAssemblySymbols)
         {
-            WalkNamespace(refAsm.GlobalNamespace, context);
+            TypeWalker.Walk(refAsm.GlobalNamespace, type =>
+            {
+                if (ProcessType(type, context) is { } found) results.Add(found);
+            }, ct);
         }
-        return new RequireWalkResult(results, diagnostics);
+        return new EquatableArray<RequireDiscovery>(results.ToArray());
     }
 
     private sealed record WalkContext(
         Compilation Compilation,
         INamedTypeSymbol RequireAttr,
-        INamedTypeSymbol? RequireAnyAttr,
-        List<RequireInfo> Sink,
-        List<Diagnostic> Diagnostics);
-
-    private static void WalkNamespace(INamespaceOrTypeSymbol root, WalkContext context)
+        INamedTypeSymbol? RequireAnyAttr)
     {
-        var stack = new Stack<INamespaceOrTypeSymbol>();
-        stack.Push(root);
-        while (stack.Count > 0)
+        public static WalkContext? Create(Compilation compilation)
         {
-            var current = stack.Pop();
-
-            // Nested types pushed via type.GetTypeMembers() are popped here as INamedTypeSymbol.
-            // The original walker only iterated their members; ProcessType was never called on the
-            // nested type itself. Without this, [RequirePolicy] on a nested class is silently ignored.
-            if (current is INamedTypeSymbol currentType)
-            {
-                ProcessType(currentType, context);
-            }
-
-            foreach (var member in current.GetMembers())
-            {
-                if (member is INamespaceSymbol ns)
-                {
-                    stack.Push(ns);
-                }
-                else if (member is INamedTypeSymbol type)
-                {
-                    foreach (var nested in type.GetTypeMembers()) stack.Push(nested);
-                    ProcessType(type, context);
-                }
-            }
+            var requireAttr = compilation.GetTypeByMetadataName(RequirePolicyAttributeFullName);
+            if (requireAttr is null) return null;
+            return new WalkContext(compilation, requireAttr, compilation.GetTypeByMetadataName(RequireAnyPolicyAttributeFullName));
         }
     }
 
-    private static void ProcessType(INamedTypeSymbol type, WalkContext context)
+    private static RequireDiscovery? ProcessType(INamedTypeSymbol type, WalkContext context)
     {
         List<RequireGroup>? groups = null;
+        List<DiagnosticInfo>? diagnostics = null;
 
         foreach (var a in type.GetAttributes())
         {
@@ -77,49 +68,68 @@ internal static class RequireSymbolWalker
             }
             else if (context.RequireAnyAttr is not null && SymbolEqualityComparer.Default.Equals(a.AttributeClass, context.RequireAnyAttr))
             {
-                TryAddRequireAnyGroup(a, type, context.Compilation, ref groups, context.Diagnostics);
+                TryAddRequireAnyGroup(a, type, context.Compilation, ref groups, ref diagnostics);
             }
         }
 
-        if (groups is null || groups.Count == 0) return;
-
-        var fqn = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (groups is null || groups.Count == 0)
+        {
+            return diagnostics is null ? null : Found(null);
+        }
 
         // ZAUTH005 (defensive): the [RequirePolicy] AttributeTargets restriction already
         // blocks interface/enum/delegate targets at the compiler. This is belt-and-suspenders.
         // At the type identifier.
         if (type.TypeKind != TypeKind.Class && type.TypeKind != TypeKind.Struct)
         {
-            context.Diagnostics.Add(Diagnostic.Create(
+            (diagnostics ??= new List<DiagnosticInfo>()).Add(DiagnosticInfo.Create(
                 Descriptors.RequirePolicyInvalidTarget,
                 SourceLocations.Of(type, context.Compilation),
-                fqn,
+                Fqn(type),
                 type.TypeKind.ToString().ToLowerInvariant()));
-            return;
+            return Found(null);
         }
 
         var unqualified = type.ToDisplayString(new SymbolDisplayFormat(
             typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces));
-        var safe = SanitizeIdentifier(unqualified);
-        context.Sink.Add(new RequireInfo(fqn, safe, groups));
+        return Found(new RequireInfo(Fqn(type), SanitizeIdentifier(unqualified), new EquatableArray<RequireGroup>(groups.ToArray())));
+
+        RequireDiscovery Found(RequireInfo? require) => new(
+            Fqn(type),
+            SourceLocations.Of(type, context.Compilation),
+            require,
+            diagnostics is null ? EquatableArray<DiagnosticInfo>.Empty : new EquatableArray<DiagnosticInfo>(diagnostics.ToArray()));
     }
+
+    private static string Fqn(INamedTypeSymbol type) => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
     private static void TryAddRequireGroup(AttributeData a, Compilation compilation, ref List<RequireGroup>? groups)
     {
         if (a.ConstructorArguments.Length == 0) return;
         if (a.ConstructorArguments[0].Value is not string name || string.IsNullOrEmpty(name)) return;
 
-        IReadOnlyList<TypedConstant>? argList = null;
-        if (a.ConstructorArguments.Length >= 2 && a.ConstructorArguments[1].Kind == TypedConstantKind.Array)
+        EquatableArray<ConstantArg>? argList = null;
+        // [RequirePolicy("name", null)] passes a null array: no arguments, as the attribute sees it.
+        if (a.ConstructorArguments.Length >= 2
+            && a.ConstructorArguments[1].Kind == TypedConstantKind.Array
+            && !a.ConstructorArguments[1].IsNull)
         {
-            argList = a.ConstructorArguments[1].Values;
+            var values = a.ConstructorArguments[1].Values;
+            var args = new ConstantArg[values.Length];
+            for (var i = 0; i < args.Length; i++)
+            {
+                args[i] = new ConstantArg(
+                    ConstantLiterals.Format(values[i]),
+                    values[i].Type is { } argType ? TypeRef.From(argType) : null);
+            }
+            argList = new EquatableArray<ConstantArg>(args);
         }
 
         groups ??= new List<RequireGroup>();
         groups.Add(new RequireGroup(
             RequireGroupKind.All,
-            new[] { name },
-            new IReadOnlyList<TypedConstant>?[] { argList },
+            new EquatableArray<string>(new[] { name }),
+            new EquatableArray<EquatableArray<ConstantArg>?>(new[] { argList }),
             SourceLocations.Of(a, compilation)));
     }
 
@@ -128,11 +138,11 @@ internal static class RequireSymbolWalker
         INamedTypeSymbol type,
         Compilation compilation,
         ref List<RequireGroup>? groups,
-        List<Diagnostic> diagnostics)
+        ref List<DiagnosticInfo>? diagnostics)
     {
         var attributeLocation = SourceLocations.Of(a, compilation);
         if (a.ConstructorArguments.Length == 0) return;
-        if (a.ConstructorArguments[0].Kind != TypedConstantKind.Array) return;
+        if (a.ConstructorArguments[0].Kind != TypedConstantKind.Array || a.ConstructorArguments[0].IsNull) return;
         var nameValues = a.ConstructorArguments[0].Values;
 
         var names = new List<string>(nameValues.Length);
@@ -144,18 +154,17 @@ internal static class RequireSymbolWalker
 
         if (names.Count == 1)
         {
-            diagnostics.Add(Diagnostic.Create(
+            (diagnostics ??= new List<DiagnosticInfo>()).Add(DiagnosticInfo.Create(
                 Descriptors.RequireAnyPolicySingleName,
                 attributeLocation,
-                names[0], type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                names[0], Fqn(type)));
         }
 
-        var argsPerName = new IReadOnlyList<TypedConstant>?[names.Count];
         groups ??= new List<RequireGroup>();
         groups.Add(new RequireGroup(
             RequireGroupKind.Any,
-            names,
-            argsPerName,
+            new EquatableArray<string>(names.ToArray()),
+            new EquatableArray<EquatableArray<ConstantArg>?>(new EquatableArray<ConstantArg>?[names.Count]),
             attributeLocation));
     }
 

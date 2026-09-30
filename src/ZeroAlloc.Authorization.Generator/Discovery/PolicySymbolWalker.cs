@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 using ZeroAlloc.Authorization.Generator.Diagnostics;
 
@@ -7,69 +7,57 @@ namespace ZeroAlloc.Authorization.Generator.Discovery;
 
 internal static class PolicySymbolWalker
 {
-    private const string PolicyAttributeFullName       = "ZeroAlloc.Authorization.PolicyAttribute";
+    public const string PolicyAttributeFullName        = "ZeroAlloc.Authorization.PolicyAttribute";
     private const string IAuthorizationPolicyFullName  = "ZeroAlloc.Authorization.IAuthorizationPolicy";
     private const string IAuthorizationPolicy1FullName = "ZeroAlloc.Authorization.IAuthorizationPolicy`1";
     private const string IAuthorizationPolicy2FullName = "ZeroAlloc.Authorization.IAuthorizationPolicy`2";
     private const string IAuthorizationPolicy3FullName = "ZeroAlloc.Authorization.IAuthorizationPolicy`3";
 
-    public static PolicyWalkResult Find(Compilation compilation)
+    /// <summary>
+    /// The policy on one type of this compilation, or null when the type carries no [Policy].
+    /// </summary>
+    public static PolicyDiscovery? Discover(ISymbol symbol, Compilation compilation)
     {
-        var policyAttr = compilation.GetTypeByMetadataName(PolicyAttributeFullName);
-        if (policyAttr is null) return new PolicyWalkResult(System.Array.Empty<PolicyInfo>(), System.Array.Empty<Diagnostic>());
+        if (symbol is not INamedTypeSymbol type) return null;
+        var context = WalkContext.Create(compilation);
+        return context is null ? null : ProcessType(type, context);
+    }
 
-        var policyInterfaces = new INamedTypeSymbol?[4];
-        policyInterfaces[0] = compilation.GetTypeByMetadataName(IAuthorizationPolicyFullName);
-        policyInterfaces[1] = compilation.GetTypeByMetadataName(IAuthorizationPolicy1FullName);
-        policyInterfaces[2] = compilation.GetTypeByMetadataName(IAuthorizationPolicy2FullName);
-        policyInterfaces[3] = compilation.GetTypeByMetadataName(IAuthorizationPolicy3FullName);
+    /// <summary>
+    /// The policies declared in the compilation's referenced assemblies, in walk order.
+    /// </summary>
+    public static EquatableArray<PolicyDiscovery> FindInReferences(Compilation compilation, CancellationToken ct)
+    {
+        var context = WalkContext.Create(compilation);
+        if (context is null) return EquatableArray<PolicyDiscovery>.Empty;
 
-        var results = new List<PolicyInfo>();
-        var diagnostics = new List<Diagnostic>();
-        var context = new WalkContext(compilation, policyAttr, policyInterfaces, results, diagnostics);
-        WalkNamespace(compilation.SourceModule.GlobalNamespace, context);
+        var results = new List<PolicyDiscovery>();
         foreach (var refAsm in compilation.SourceModule.ReferencedAssemblySymbols)
         {
-            WalkNamespace(refAsm.GlobalNamespace, context);
+            TypeWalker.Walk(refAsm.GlobalNamespace, type =>
+            {
+                if (ProcessType(type, context) is { } found) results.Add(found);
+            }, ct);
         }
-        return new PolicyWalkResult(results, diagnostics);
+        return new EquatableArray<PolicyDiscovery>(results.ToArray());
     }
 
     private sealed record WalkContext(
         Compilation Compilation,
         INamedTypeSymbol PolicyAttr,
-        INamedTypeSymbol?[] PolicyInterfaces,
-        List<PolicyInfo> Sink,
-        List<Diagnostic> Diagnostics);
-
-    private static void WalkNamespace(INamespaceOrTypeSymbol root, WalkContext context)
+        INamedTypeSymbol?[] PolicyInterfaces)
     {
-        var stack = new Stack<INamespaceOrTypeSymbol>();
-        stack.Push(root);
-        while (stack.Count > 0)
+        public static WalkContext? Create(Compilation compilation)
         {
-            var current = stack.Pop();
+            var policyAttr = compilation.GetTypeByMetadataName(PolicyAttributeFullName);
+            if (policyAttr is null) return null;
 
-            // Nested types pushed via type.GetTypeMembers() are popped here as INamedTypeSymbol.
-            // The original walker only iterated their members; ProcessType was never called on the
-            // nested type itself. Without this, [Policy] on a nested class is silently ignored.
-            if (current is INamedTypeSymbol currentType)
-            {
-                ProcessType(currentType, context);
-            }
-
-            foreach (var member in current.GetMembers())
-            {
-                if (member is INamespaceSymbol ns)
-                {
-                    stack.Push(ns);
-                }
-                else if (member is INamedTypeSymbol type)
-                {
-                    foreach (var nested in type.GetTypeMembers()) stack.Push(nested);
-                    ProcessType(type, context);
-                }
-            }
+            var policyInterfaces = new INamedTypeSymbol?[4];
+            policyInterfaces[0] = compilation.GetTypeByMetadataName(IAuthorizationPolicyFullName);
+            policyInterfaces[1] = compilation.GetTypeByMetadataName(IAuthorizationPolicy1FullName);
+            policyInterfaces[2] = compilation.GetTypeByMetadataName(IAuthorizationPolicy2FullName);
+            policyInterfaces[3] = compilation.GetTypeByMetadataName(IAuthorizationPolicy3FullName);
+            return new WalkContext(compilation, policyAttr, policyInterfaces);
         }
     }
 
@@ -119,14 +107,13 @@ internal static class PolicySymbolWalker
     }
 
     // ZAUTH003, ZAUTH004 and ZAUTH008 are about the class, and are reported at its identifier.
-    private static void ProcessType(INamedTypeSymbol type, WalkContext context)
+    private static PolicyDiscovery? ProcessType(INamedTypeSymbol type, WalkContext context)
     {
-        var diagnostics = context.Diagnostics;
         var policyAttribute = FindPolicyAttribute(type, context.PolicyAttr);
-        if (policyAttribute is null) return;
-        if (policyAttribute.ConstructorArguments.Length == 0) return;
+        if (policyAttribute is null) return null;
+        if (policyAttribute.ConstructorArguments.Length == 0) return null;
         var nameArg = policyAttribute.ConstructorArguments[0];
-        if (nameArg.Value is not string policyName) return;
+        if (nameArg.Value is not string policyName) return null;
 
         var fqn = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var match = FindPolicyInterfaces(type, context.PolicyInterfaces);
@@ -135,45 +122,52 @@ internal static class PolicySymbolWalker
         // ZAUTH003: [Policy] class must implement IAuthorizationPolicy (any variant).
         if (match.VariantsCount == 0)
         {
-            diagnostics.Add(Diagnostic.Create(
+            return Rejected(fqn, DiagnosticInfo.Create(
                 Descriptors.PolicyDoesNotImplementInterface,
                 typeLocation,
                 fqn));
-            return;
         }
 
         // ZAUTH008: implementing more than one IAuthorizationPolicy variant is ambiguous.
         if (match.VariantsCount > 1)
         {
-            diagnostics.Add(Diagnostic.Create(
+            return Rejected(fqn, DiagnosticInfo.Create(
                 Descriptors.PolicyImplementsMultipleVariants,
                 typeLocation,
                 policyName,
                 fqn,
                 match.VariantsLabel));
-            return;
         }
 
+        var diagnostics = EquatableArray<DiagnosticInfo>.Empty;
         var instantiable = !type.IsAbstract && !type.IsStatic;
         if (!instantiable)
         {
             // ZAUTH004: [Policy] class is abstract/static — DI cannot construct it.
-            diagnostics.Add(Diagnostic.Create(
-                Descriptors.PolicyNotInstantiable,
-                typeLocation,
-                fqn));
+            diagnostics = new EquatableArray<DiagnosticInfo>(new[]
+            {
+                DiagnosticInfo.Create(Descriptors.PolicyNotInstantiable, typeLocation, fqn),
+            });
         }
 
         var resolved = match.Parameterless ?? match.Generic!;
-        var typeArgs = resolved.TypeArguments;
+        var typeArgs = new TypeRef[resolved.TypeArguments.Length];
+        for (var i = 0; i < typeArgs.Length; i++)
+        {
+            typeArgs[i] = TypeRef.From(resolved.TypeArguments[i]);
+        }
         var arity = match.Parameterless is not null ? 0 : match.GenericArity;
 
-        context.Sink.Add(new PolicyInfo(
+        var policy = new PolicyInfo(
             fqn,
             policyName,
             arity,
-            typeArgs.ToArray(),
+            new EquatableArray<TypeRef>(typeArgs),
             instantiable,
-            SourceLocations.Of(policyAttribute, context.Compilation)));
+            SourceLocations.Of(policyAttribute, context.Compilation));
+        return new PolicyDiscovery(fqn, policy, diagnostics);
     }
+
+    private static PolicyDiscovery Rejected(string fqn, DiagnosticInfo diagnostic) =>
+        new(fqn, null, new EquatableArray<DiagnosticInfo>(new[] { diagnostic }));
 }

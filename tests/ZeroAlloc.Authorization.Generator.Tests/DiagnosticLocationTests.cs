@@ -154,8 +154,9 @@ public sealed class DiagnosticLocationTests
     [Fact]
     public void EditAboveAPolicy_MovesItsDiagnostic()
     {
-        // The generator reruns on every compilation and reads locations from that compilation's
-        // symbols, so a diagnostic follows its code into the new tree.
+        // A model's location is part of its equality, so an edit to its tree reruns the model and
+        // the diagnostic follows its code into the new tree, rather than being served from the
+        // cache with a location in the old one.
         const string source = Prelude + """
             [Policy("admin")]
             public sealed class AdminPolicy { }

@@ -16,6 +16,8 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
     <!-- Verify.SourceGenerators 2.x depends on Verify 26.x; the matching Verify.Xunit is 26.x. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+    <!-- The generated code calls the DI extension methods; GeneratedCodeCompilesTests compiles it. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

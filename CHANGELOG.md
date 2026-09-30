@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.5](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.4...v2.1.5) (2026-09-30)
+
+
+### Bug Fixes
+
+* a null argument or name array no longer crashes the generator ([f1aa134](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/f1aa1344d9f68642de7af15fb83db7222c6e9848))
+* a policy required twice no longer declares the same local twice ([f1aa134](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/f1aa1344d9f68642de7af15fb83db7222c6e9848))
+* generated dispatch passes float, negative enum, escaped string and char, typeof and array arguments correctly ([f1aa134](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/f1aa1344d9f68642de7af15fb83db7222c6e9848))
+
 ## [2.1.4](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.3...v2.1.4) (2026-09-28)
 
 

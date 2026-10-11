@@ -73,14 +73,12 @@ public class AllocationBudgetTests
     }
 
     [Fact]
-    public void Parameterized_EvaluateAsync_Allocates_Within_Budget()
+    public void Parameterized_EvaluateAsync_ZeroAllocation()
     {
-        // v2.1: [RequirePolicy("MinAge", 18)] dispatch — the int arg is emitted as a
-        // literal in the generator output (no boxing, no object[]). Measured ~24 B/call
-        // on net10.0 Release: that's the ValueTask<UnitResult<...>> wrap returned by
-        // AuthorizerFor<T>.EvaluateAsync; the typed int `18` itself contributes 0 bytes.
-        // The 256 B/call budget leaves headroom for jitter while still catching a
-        // regression that boxes the typed arg (would add ~24 B per arg).
+        // v2.1: [RequirePolicy("MinAge", 18)] dispatch. The generator emits the int arg as a
+        // literal and calls IAuthorizationPolicy<int>.EvaluateAsync with it typed: no boxing,
+        // no object[], and the synchronously completed ValueTask<UnitResult<...>> is a struct.
+        // A regression that boxes the typed arg adds ~24 B per arg and fails this gate.
         var services = new ServiceCollection();
         services.AddZeroAllocAuthorization();
         using var sp = services.BuildServiceProvider();
@@ -89,12 +87,30 @@ public class AllocationBudgetTests
         var authorizer = scope.ServiceProvider
             .GetRequiredService<AuthorizerFor<MinAgeProtectedRequest>>();
         // Age >= 18 -> Success path: avoids the policy's in-failure string interpolation
-        // so the gate isolates the dispatch cost (DI handoff + ValueTask wrap).
+        // so the gate isolates the dispatch cost.
         var ctx = new AgedTestContext("alice", age: 21);
 
-        AllocationGate.AssertBudgetValueTask(256, 100,
+        AllocationGate.AssertBudgetValueTask(0, 1000,
             () => authorizer.EvaluateAsync(ctx),
             "[Parameterized] AuthorizerFor<MinAgeProtectedRequest>.EvaluateAsync (literal 18 dispatch)");
+    }
+
+    [Fact]
+    public void AnyOf_EvaluateAsync_ZeroAllocation()
+    {
+        // [RequireAnyPolicy("AllowOr", "ProbeSecond")]: the first candidate succeeds, so the
+        // OR group short-circuits. The dispatch must not allocate on that path.
+        var services = new ServiceCollection();
+        services.AddZeroAllocAuthorization();
+        using var sp = services.BuildServiceProvider();
+        using var scope = sp.CreateScope();
+
+        var authorizer = scope.ServiceProvider
+            .GetRequiredService<AuthorizerFor<OrCompositionFirstSucceedsRequest>>();
+
+        AllocationGate.AssertBudgetValueTask(0, 1000,
+            () => authorizer.EvaluateAsync(AnonymousSecurityContext.Instance),
+            "[RequireAnyPolicy] AuthorizerFor<OrCompositionFirstSucceedsRequest>.EvaluateAsync (first succeeds)");
     }
 
     private static TestContext NewAdminContext()

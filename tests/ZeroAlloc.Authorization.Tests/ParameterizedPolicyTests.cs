@@ -93,7 +93,9 @@ internal sealed class MinAgePolicy : IAuthorizationPolicy<int>
         ISecurityContext ctx, int arg1, CancellationToken ct = default)
     {
         LastArgReceived = arg1;
-        LastArgRuntimeType = arg1.GetType();
+        // Not arg1.GetType(): that boxes the int, 24 B per call, which the allocation gate in
+        // AllocationBudgetTests would then count against the dispatch.
+        LastArgRuntimeType = TypeOf(arg1);
 
         var age = ctx is AgedTestContext withAge ? withAge.Age : 0;
         return age >= arg1
@@ -102,6 +104,8 @@ internal sealed class MinAgePolicy : IAuthorizationPolicy<int>
             : new ValueTask<UnitResult<AuthorizationFailure>>(
                 new AuthorizationFailure("min_age.too_young", $"age {age} < {arg1}"));
     }
+
+    private static Type TypeOf<T>(T _) => typeof(T);
 }
 
 [RequirePolicy("MinAge", 18)]

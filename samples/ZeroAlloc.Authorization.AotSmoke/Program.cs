@@ -68,6 +68,11 @@ using (var scope = sp.CreateScope())
     if (!orResult.IsSuccess)
         throw new InvalidOperationException("[RequireAnyPolicy] AOT smoke: expected success");
 
+    // Premium succeeds first, so the OR group short-circuits; that dispatch must be 0 B.
+    AllocationGate.AssertBudgetValueTask(0, 1000,
+        () => orAuth.EvaluateAsync(anonCtx),
+        "AuthorizerFor<OrRequest>.EvaluateAsync (first succeeds)");
+
     Console.WriteLine("AOT [RequireAnyPolicy] OK");
 
     // ------------------------------------------------------------------------
@@ -79,6 +84,12 @@ using (var scope = sp.CreateScope())
     var paramResult = await paramAuth.EvaluateAsync(new AotAgedContext("alice", 21));
     if (!paramResult.IsSuccess)
         throw new InvalidOperationException("[Parameterized] AOT smoke: expected success");
+
+    // The literal 18 reaches IAuthorizationPolicy<int> typed, so the dispatch is 0 B.
+    var adult = new AotAgedContext("alice", 21);
+    AllocationGate.AssertBudgetValueTask(0, 1000,
+        () => paramAuth.EvaluateAsync(adult),
+        "AuthorizerFor<MinAgeRequest>.EvaluateAsync (literal 18 dispatch)");
 
     Console.WriteLine("AOT [RequirePolicy(MinAge,18)] OK");
 

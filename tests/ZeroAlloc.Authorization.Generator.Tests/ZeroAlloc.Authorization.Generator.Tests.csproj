@@ -13,7 +13,7 @@
     <PackageReference Include="ZeroAlloc.TestHelpers" Version="1.2.*" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
     <!-- Verify.SourceGenerators 2.x depends on Verify 26.x; the matching Verify.Xunit is 26.x. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <!-- The generated code calls the DI extension methods; GeneratedCodeCompilesTests compiles it. -->

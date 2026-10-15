@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.6](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.5...v2.1.6) (2026-10-15)
+
+
+### Documentation
+
+* correct readme types, diagnostics and allocation claim ([#142](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/142)) ([351c575](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/351c575ff8aeb6b941375d612727c58c88217c46))
+
 ## [2.1.5](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.4...v2.1.5) (2026-09-30)
 
 

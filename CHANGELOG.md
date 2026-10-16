@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.7](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.6...v2.1.7) (2026-10-16)
+
+
+### Documentation
+
+* rewrite the readme as a product page ([#146](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/146)) ([3e19bee](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/3e19bee071046a7404cf07a9b98d5447bb29c98a))
+
 ## [2.1.6](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.5...v2.1.6) (2026-10-15)
 
 

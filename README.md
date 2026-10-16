@@ -6,149 +6,94 @@
 [![AOT](https://img.shields.io/badge/AOT--Compatible-passing-brightgreen)](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/MarcelRoozekrans?style=flat&logo=githubsponsors&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/MarcelRoozekrans)
 
-Authorization primitives for .NET — `ISecurityContext`, `IResourceSecurityContext<TResource>`, `IAuthorizationPolicy` and its parameterized `IAuthorizationPolicy<T1>`…`<T1, T2, T3>` variants, `[Policy]`, `[RequirePolicy]`, `[RequireAnyPolicy]`, `AnonymousSecurityContext`, and an `AuthorizerFor<TRequest>` dispatcher emitted by the bundled source generator.
+Source-generated authorization policies for any .NET host — policy names checked at compile time, no reflection, 0 B allocated per check, NativeAOT-ready.
 
-Used by:
-- [AI.Sentinel](https://github.com/MarcelRoozekrans/AI.Sentinel) — tool-call authorization for `IChatClient`-based agents
-- `ZeroAlloc.Mediator.Authorization` — request-handler authorization
+## Why ZeroAlloc.Authorization
+
+- **0 B per authorization check.** `AllocationGate` tests assert a 0-byte budget on every run for the allow and deny paths, a parameterized policy and an any-of group.
+- **A typo is a build error, not a 403 in production.** Requiring a policy name that no `[Policy]` declares fails the build (`ZAUTH001`); eight generator diagnostics in total catch wiring mistakes at compile time.
+- **No reflection, works under NativeAOT and trimming.** The bundled generator emits one dispatcher per request type plus the DI registrations. The library builds with `IsAotCompatible`, and CI publishes and runs a `PublishAot=true` sample on every run.
+- **Not tied to ASP.NET Core.** Policies see a small `ISecurityContext` (id, roles, claims). Mediators, agent tool calls and your own dispatchers can all evaluate the same policies.
 
 ## Install
 
 ```bash
 dotnet add package ZeroAlloc.Authorization
+dotnet add package Microsoft.Extensions.DependencyInjection # the generated registrations target it
 ```
 
-Targets `net8.0`, `net9.0`, `net10.0`. The package bundles a Roslyn source generator — no separate `*.Generator` install.
+Targets `net8.0`, `net9.0` and `net10.0`. The source generator ships inside the package. ASP.NET Core
+and generic-host apps already reference the DI package.
 
-## The contract
-
-```csharp
-using ZeroAlloc.Results;
-
-public interface ISecurityContext
-{
-    string Id { get; }
-    IReadOnlySet<string> Roles { get; }
-    IReadOnlyDictionary<string, string> Claims { get; }
-}
-
-public interface IAuthorizationPolicy
-{
-    ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
-        ISecurityContext ctx, CancellationToken ct = default);
-}
-```
-
-## Writing a policy
+## Quick start
 
 ```csharp
+using Microsoft.Extensions.DependencyInjection;
 using ZeroAlloc.Authorization;
+using ZeroAlloc.Authorization.Generated;
 using ZeroAlloc.Results;
+
+var services = new ServiceCollection().AddZeroAllocAuthorization(); // generated
+using var scope = services.BuildServiceProvider().CreateScope();
+var authorizer = scope.ServiceProvider.GetRequiredService<AuthorizerFor<DeleteUser>>();
+
+var result = await authorizer.EvaluateAsync(AnonymousSecurityContext.Instance);
+Console.WriteLine(result.IsFailure ? $"denied: {result.Error.Code}" : "allowed");
+// denied: auth.admin_required
 
 [Policy("AdminOnly")]
-public sealed class AdminOnlyPolicy : IAuthorizationPolicy
+public sealed class AdminOnly : IAuthorizationPolicy
 {
-    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
-        ISecurityContext ctx, CancellationToken ct = default)
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(ISecurityContext ctx, CancellationToken ct = default)
         => new(ctx.Roles.Contains("Admin")
             ? UnitResult<AuthorizationFailure>.Success()
-            : new AuthorizationFailure(AuthorizationFailure.DefaultDenyCode, "Admin role required"));
+            : new AuthorizationFailure("auth.admin_required", "Admin role required"));
 }
-```
 
-Bind it on a request type — `[RequirePolicy]` is class/struct-level only, and stacks:
-
-```csharp
 [RequirePolicy("AdminOnly")]
-public sealed record DeleteUserCommand(string UserId);
-
-[RequirePolicy("ActiveTenant")]
-[RequirePolicy("AdminOnly")]
-public sealed record PurgeTenantCommand(string TenantId);
+public sealed record DeleteUser(string UserId);
 ```
 
-## Host wiring
+`AddZeroAllocAuthorization()` and `AuthorizerFor<DeleteUser>` come from the generator: it found the
+`[Policy]` class and the `[RequirePolicy]` request and wrote the dispatch for you. Rename the policy
+without updating the request and the build fails.
 
-The bundled generator emits one `AuthorizerFor<TRequest>` subclass per `[RequirePolicy]`-decorated type plus an `AddZeroAllocAuthorization()` extension on `IServiceCollection`. Hosts call the extension at startup and resolve `AuthorizerFor<T>` per request:
+## What you get
 
-```csharp
-using ZeroAlloc.Authorization.Generated;
+- **Named policies** with `[Policy("Name")]`, bound to request types with `[RequirePolicy("Name")]`. Stack several and all must allow.
+- **Any-of groups** with `[RequireAnyPolicy("A", "B")]`: the first policy that allows short-circuits the group.
+- **Parameterized policies** such as `[RequirePolicy("MinAge", 18)]`. Arguments are type-checked against the policy at compile time and passed typed, without boxing.
+- **Resource-based authorization** through `IResourceSecurityContext<TResource>`: when the host supplies it, a policy can inspect the resource it guards.
+- **Structured denials.** A failure carries a machine-readable code and a reason, returned as a `UnitResult<AuthorizationFailure>` your host maps to HTTP 403, an exception or a refused tool call.
+- **Async policies** for checks that need I/O, such as a tenant lookup.
+- **Your own context.** Extend `ISecurityContext` with host-specific data; `AnonymousSecurityContext.Instance` covers callers with no identity.
+- **Mediator integration:** [ZeroAlloc.Mediator.Authorization](https://github.com/ZeroAlloc-Net/ZeroAlloc.Mediator/tree/main/src/ZeroAlloc.Mediator.Authorization) runs these policies as a pipeline behavior before the handler of any request that carries `[RequirePolicy]`.
+- **Used by** [AI.Sentinel](https://github.com/MarcelRoozekrans/AI.Sentinel) for tool-call authorization of `IChatClient`-based agents.
 
-builder.Services.AddZeroAllocAuthorization();
-```
-
-```csharp
-var authorizer = sp.GetService<AuthorizerFor<DeleteUserCommand>>();
-if (authorizer is not null)
-{
-    var result = await authorizer.EvaluateAsync(securityContext, ct);
-    if (result.IsFailure)
-        return Forbid(result.Error); // host maps Code / Reason to its outcome shape
-}
-```
-
-## Hosts can extend `ISecurityContext`
-
-Hosts define their own subinterface for richer payloads. AI.Sentinel adds `IToolCallSecurityContext : ISecurityContext` with `ToolName` + `Args`. `ZeroAlloc.Mediator.Authorization` passes the request through `IResourceSecurityContext<TRequest>`. Inside the policy body, downcast:
-
-```csharp
-public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
-    ISecurityContext ctx, CancellationToken ct = default)
-    => new(ctx is IToolCallSecurityContext tc && tc.ToolName == "delete_database"
-        ? new AuthorizationFailure("tool.destructive", "destructive tool blocked")
-        : UnitResult<AuthorizationFailure>.Success());
-```
-
-## I/O-bound policies
-
-For checks that need to await something (tenant lookup, external claims validation), mark `EvaluateAsync` as `async`:
-
-```csharp
-[Policy("ActiveTenant")]
-public sealed class ActiveTenantPolicy(ITenantService tenants) : IAuthorizationPolicy
-{
-    public async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
-        ISecurityContext ctx, CancellationToken ct = default)
-    {
-        var active = await tenants.IsActiveAsync(ctx.Id, ct).ConfigureAwait(false);
-        return active
-            ? UnitResult<AuthorizationFailure>.Success()
-            : new AuthorizationFailure("tenant.inactive", "tenant is suspended");
-    }
-}
-```
-
-## Generator diagnostics
-
-The bundled generator emits eight compile-time diagnostics:
-
-| ID | Fires when |
-|---|---|
-| `ZAUTH001` | `[RequirePolicy("X")]` references a policy name with no matching `[Policy("X")]`. |
-| `ZAUTH002` | Two `[Policy("X")]` declarations share the same name. |
-| `ZAUTH003` | `[Policy]` class doesn't implement `IAuthorizationPolicy`. |
-| `ZAUTH004` | `[Policy]` class is abstract or static. |
-| `ZAUTH005` | `[RequirePolicy]` placed on a non-class/non-struct target. |
-| [`ZAUTH006`](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/docs/diagnostics/ZAUTH006.md) | `[RequireAnyPolicy]` lists a single policy name; use `[RequirePolicy]` instead. |
-| [`ZAUTH007`](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/docs/diagnostics/ZAUTH007.md) | `[RequirePolicy("X", ...)]` arguments don't match the shape of the policy's `IAuthorizationPolicy<…>` interface. |
-| [`ZAUTH008`](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/docs/diagnostics/ZAUTH008.md) | A `[Policy]` class implements more than one `IAuthorizationPolicy` variant. |
+Diagnostics `ZAUTH001`–`ZAUTH008` are listed in [Getting started](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/docs/getting-started.md#generator-diagnostics).
 
 ## Performance
 
-BenchmarkDotNet (BDN ShortRun, .NET 10 release build, x64) — happy path on a simple role-check policy:
+Allocation per call, asserted by the `AllocationGate` tests in
+[`AllocationBudgetTests.cs`](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/tests/ZeroAlloc.Authorization.Tests/AllocationBudgetTests.cs):
 
-| Method | Mean | Allocated |
-|---|---:|---:|
-| `EvaluateAsync` | ~99 ns | 0 B |
+| Path | Allocated |
+|---|---:|
+| `EvaluateAsync`, allow and deny | 0 B |
+| Generated dispatch, parameterized `[RequirePolicy("MinAge", 18)]` | 0 B |
+| Generated dispatch, `[RequireAnyPolicy]` with the first policy allowing | 0 B |
 
-Source: [`benchmarks/ZeroAlloc.Authorization.Benchmarks/PolicyEvaluationBenchmarks.cs`](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/benchmarks/ZeroAlloc.Authorization.Benchmarks/PolicyEvaluationBenchmarks.cs).
+No head-to-head benchmark against another authorization library is published yet. Timings, the
+benchmark sources and how zero allocation is enforced are in
+[docs/performance.md](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/docs/performance.md).
 
-The zero-allocation contract is enforced by `AllocationGate` tests in [`tests/ZeroAlloc.Authorization.Tests/AllocationBudgetTests.cs`](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/tests/ZeroAlloc.Authorization.Tests/AllocationBudgetTests.cs), which assert a 0 B budget on every run for the allow and deny paths of `EvaluateAsync`, a parameterized `[RequirePolicy]` dispatch and a `[RequireAnyPolicy]` dispatch.
+## Learn more
 
-NativeAOT compatibility is checked separately:
-1. `<IsAotCompatible>true</IsAotCompatible>` on the main library, so the IL2026/IL3050 analyzers fire on any reflection regression at build time.
-2. The `samples/ZeroAlloc.Authorization.AotSmoke/` console app, published with `PublishAot=true` and run on each CI run.
-
-## License
-
-MIT.
+- **Documentation:** [authorization.zeroalloc.net](https://authorization.zeroalloc.net) — policies, attributes, host integration and testing guides.
+- **Related ZeroAlloc packages:**
+  - [ZeroAlloc.Mediator](https://github.com/ZeroAlloc-Net/ZeroAlloc.Mediator) ([docs](https://mediator.zeroalloc.net)) — source-generated mediator; its `ZeroAlloc.Mediator.Authorization` package enforces these policies before handlers run.
+  - [ZeroAlloc.Pipeline](https://github.com/ZeroAlloc-Net/ZeroAlloc.Pipeline) ([docs](https://pipeline.zeroalloc.net)) — the behavior pipeline the Mediator's authorization step runs in.
+  - [ZeroAlloc.Results](https://github.com/ZeroAlloc-Net/ZeroAlloc.Results) ([docs](https://results.zeroalloc.net)) — the `UnitResult<AuthorizationFailure>` type every policy returns.
+  - [ZeroAlloc.Validation](https://github.com/ZeroAlloc-Net/ZeroAlloc.Validation) ([docs](https://validation.zeroalloc.net)) — source-generated validation that plugs into the same Mediator pipeline.
+- **Contributing:** [issues](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues) and [pull requests](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/pulls) are welcome.
+- **License:** [MIT](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/LICENSE).

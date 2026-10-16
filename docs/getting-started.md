@@ -122,7 +122,7 @@ public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
 
 ## Generator diagnostics
 
-The generator emits five compile-time diagnostics to catch wiring mistakes before they hit production:
+The generator emits eight compile-time diagnostics to catch wiring mistakes before they hit production:
 
 | ID | Fires when |
 |---|---|
@@ -131,6 +131,9 @@ The generator emits five compile-time diagnostics to catch wiring mistakes befor
 | `ZAUTH003` | `[Policy]`-decorated class does not implement `IAuthorizationPolicy`. |
 | `ZAUTH004` | `[Policy]`-decorated class is abstract or static (cannot be instantiated by DI). |
 | `ZAUTH005` | `[RequirePolicy]` placed on a non-class/non-struct target (interface, delegate, primitive, method). |
+| [`ZAUTH006`](diagnostics/ZAUTH006.md) | `[RequireAnyPolicy]` lists a single policy name; use `[RequirePolicy]` instead. Warning. |
+| [`ZAUTH007`](diagnostics/ZAUTH007.md) | `[RequirePolicy("X", ...)]` arguments don't match the shape of the policy's `IAuthorizationPolicy<…>` interface. |
+| [`ZAUTH008`](diagnostics/ZAUTH008.md) | A `[Policy]` class implements more than one `IAuthorizationPolicy` variant. |
 
 ## Next
 

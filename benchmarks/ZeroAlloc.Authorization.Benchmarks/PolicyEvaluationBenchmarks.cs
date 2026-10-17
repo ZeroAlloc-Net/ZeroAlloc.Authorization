@@ -12,9 +12,11 @@ public class PolicyEvaluationBenchmarks
         new HashSet<string> { "Admin" },
         new Dictionary<string, string>());
 
+    // Returns the policy's ValueTask directly: an async forwarder here would add its own state
+    // machine to the measurement.
     [Benchmark]
-    public async ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync()
-        => await _policy.EvaluateAsync(_ctx);
+    public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync()
+        => _policy.EvaluateAsync(_ctx);
 
     private sealed class AdminOnlyPolicy : IAuthorizationPolicy
     {

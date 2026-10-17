@@ -44,10 +44,10 @@ public class AllocationBudgetTests
     [Fact]
     public void Gate_TolerantOfWarmupOnlyAllocations()
     {
-        // The helper performs 2 warmup calls before measuring. An action that allocates
-        // only on its first call (e.g. lazy field init) should be absorbed by warmup
-        // and pass a strict 0 B budget. If a future refactor skips the warmup, this
-        // test fires.
+        // The helper makes 2,000 warmup calls, then measures three windows and keeps the
+        // least. An action that allocates only on its first call (e.g. lazy field init)
+        // should be absorbed by warmup and pass a strict 0 B budget. If a future refactor
+        // skips the warmup, this test fires.
         var firstCall = true;
         AllocationGate.AssertBudget(0, 1000, () =>
         {

@@ -27,6 +27,9 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # Codecov upload via OIDC, no token secret
 
     steps:
       - uses: actions/checkout@v7
@@ -65,7 +68,9 @@ jobs:
         run: dotnet build ZeroAlloc.Authorization.slnx --configuration Release --no-restore -p:Version=${{ steps.gitversion.outputs.semver }}
 
       - name: Test
-        run: dotnet test ZeroAlloc.Authorization.slnx --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+        # One results directory for all test projects: LogFilePrefix gives each its own .trx,
+        # where a fixed LogFileName would make them overwrite one another.
+        run: dotnet test ZeroAlloc.Authorization.slnx --configuration Release --no-build --verbosity normal --logger "trx;LogFilePrefix=test-results" --settings coverage.runsettings --results-directory TestResults
 
       - name: Upload test results
         if: always()
@@ -73,6 +78,15 @@ jobs:
         with:
           name: test-results
           path: "**/*.trx"
+
+      - name: Upload coverage to Codecov
+        if: '!cancelled()'
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: "TestResults/**/coverage.cobertura.xml"
+          disable_search: true   # only the files above, not every *.xml the search finds
+          fail_ci_if_error: false
 
       - name: Pack (verify)
         run: dotnet pack ZeroAlloc.Authorization.slnx --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.gitversion.outputs.semver }}

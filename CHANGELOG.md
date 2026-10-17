@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.8](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.7...v2.1.8) (2026-10-17)
+
+
+### Documentation
+
+* re-run the benchmarks pinned, with three launches ([#160](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/160)) ([d6949fd](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/d6949fd130b4f3039ad20538d44e94d1daa950f6))
+
 ## [2.1.7](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.6...v2.1.7) (2026-10-16)
 
 

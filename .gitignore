@@ -82,3 +82,6 @@ publish/
 
 # BenchmarkDotNet
 BenchmarkDotNet.Artifacts/
+
+# Test results and coverage reports
+TestResults/

@@ -84,7 +84,7 @@ Allocation per call, asserted by the `AllocationGate` tests in
 | Generated dispatch, parameterized `[RequirePolicy("MinAge", 18)]` | 0 B |
 | Generated dispatch, `[RequireAnyPolicy]` with the first policy allowing | 0 B |
 
-No head-to-head benchmark against another authorization library is published yet. Timings, the
+No head-to-head benchmark against another authorization library is published yet. Same-run ratios, the
 benchmark sources and how zero allocation is enforced are in
 [docs/performance.md](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/docs/performance.md).
 

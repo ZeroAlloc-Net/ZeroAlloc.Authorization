@@ -8,6 +8,11 @@ namespace ZeroAlloc.Authorization.Tests;
 
 public class AllocationBudgetTests
 {
+    // The self-tests' allocations escape to this field. The gate measures optimised code, and
+    // since .NET 10 the JIT puts an object that never leaves the method on the stack, so a
+    // discarded `_ = new object()` allocates nothing there.
+    private static object? s_sink;
+
     [Fact]
     public void Gate_DetectsAllocation_WhenActionAllocates()
     {
@@ -15,7 +20,7 @@ public class AllocationBudgetTests
             AllocationGate.AssertBudget(
                 budgetBytes: 0,
                 iterations: 1000,
-                action: () => _ = new object(),
+                action: () => s_sink = new object(),
                 label: "test-allocator"));
 
         Assert.Contains("test-allocator", ex.Message);
@@ -44,14 +49,14 @@ public class AllocationBudgetTests
     [Fact]
     public void Gate_TolerantOfWarmupOnlyAllocations()
     {
-        // The helper makes 2,000 warmup calls, then measures three windows and keeps the
-        // least. An action that allocates only on its first call (e.g. lazy field init)
-        // should be absorbed by warmup and pass a strict 0 B budget. If a future refactor
-        // skips the warmup, this test fires.
+        // The helper makes 2,000 warmup calls, then measures windows until the result is
+        // stable and keeps the least window. An action that allocates only on its first call
+        // (e.g. lazy field init) should be absorbed by warmup and pass a strict 0 B budget. If
+        // a future refactor skips the warmup, this test fires.
         var firstCall = true;
         AllocationGate.AssertBudget(0, 1000, () =>
         {
-            if (firstCall) { firstCall = false; _ = new object(); }
+            if (firstCall) { firstCall = false; s_sink = new object(); }
         }, "warmup-only-allocator");
     }
 

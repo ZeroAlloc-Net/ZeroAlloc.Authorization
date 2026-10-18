@@ -83,7 +83,7 @@
     <None Include="$(MSBuildThisFileDirectory)assets\icon.png" Pack="true" PackagePath="\" Condition="Exists('$(MSBuildThisFileDirectory)assets\icon.png')" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Meziantou.Analyzer" Version="3.0.302">
+    <PackageReference Include="Meziantou.Analyzer" Version="3.0.303">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
@@ -95,7 +95,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.401">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.402">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>

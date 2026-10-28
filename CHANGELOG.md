@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.9](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.8...v2.1.9) (2026-10-28)
+
+
+### Bug Fixes
+
+* always emit AddZeroAllocAuthorization and register a probe marker ([#171](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/171)) ([7d3ee51](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/7d3ee51f8dab89d1f721014e36bc84cadcc4a6e0)), closes [#170](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/170)
+* bind hosts to the policy layer in a layered app, not an empty AddZeroAllocAuthorization ([#174](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/174)) ([79399d6](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/79399d601ab2352aebcf6c3c8db03870a5b68974))
+
 ## [2.1.8](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.7...v2.1.8) (2026-10-18)
 
 

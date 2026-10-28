@@ -76,7 +76,7 @@ public sealed record PurgeTenantCommand(string TenantId);
 The bundled source generator inspects your compilation for `[Policy]`-decorated classes and `[RequirePolicy]`-decorated request types, then emits:
 
 - One `AuthorizerFor<TRequest>` subclass per request type, calling the named policies in order.
-- An `AddZeroAllocAuthorization()` extension method on `IServiceCollection` that registers every `[Policy]` class and every emitted `AuthorizerFor<T>` as scoped services.
+- An `AddZeroAllocAuthorization()` extension method on `IServiceCollection` that registers every `[Policy]` class and every emitted `AuthorizerFor<T>` as scoped services, and always registers a `ZeroAllocAuthorizationMarker` singleton. The method exists even when the project has no policies yet, so you can wire the composition root first.
 
 Hosts wire DI once and resolve `AuthorizerFor<TRequest>` per dispatch:
 

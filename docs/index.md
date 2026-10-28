@@ -42,7 +42,7 @@ The package is the full stack — contract types **plus** a bundled Roslyn gener
 
 - Five contract types: `ISecurityContext`, `IAuthorizationPolicy`, `[Policy]`, `[RequirePolicy]`, `AnonymousSecurityContext`.
 - One dispatcher base: `AuthorizerFor<TRequest>` (abstract; the generator emits concrete subclasses).
-- One generator-emitted DI extension: `services.AddZeroAllocAuthorization()`.
+- One generator-emitted DI extension: `services.AddZeroAllocAuthorization()`, always generated, which registers the policies, the authorizers and a `ZeroAllocAuthorizationMarker` that hosts probe for.
 - Eight compile-time diagnostics: `ZAUTH001`–`ZAUTH008`.
 - v2.1 extensions: `[RequireAnyPolicy]` (OR composition),
   `IAuthorizationPolicy<T1...>` (parameterized policies, arity 1–3), and

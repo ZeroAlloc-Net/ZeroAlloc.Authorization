@@ -150,6 +150,6 @@ Nobody moves entries by hand. When release-please opens or updates the release P
 
 ## Discovery
 
-The generator runs at compile time, walks `[Policy]` and `[RequirePolicy]` attributes across the consumer's compilation and referenced assemblies, and emits one `AuthorizerFor<TRequest>` subclass per `[RequirePolicy]`-decorated type plus an `AddZeroAllocAuthorization()` extension method on `IServiceCollection`. Hosts no longer hand-write assembly scans or registry dictionaries.
+The generator runs at compile time, walks `[Policy]` and `[RequirePolicy]` attributes across the consumer's compilation and referenced assemblies, and emits one `AuthorizerFor<TRequest>` subclass per `[RequirePolicy]`-decorated type plus an `AddZeroAllocAuthorization()` extension method on `IServiceCollection`. The extension method is emitted even when the compilation has none of these, and always registers a `ZeroAllocAuthorizationMarker` singleton that hosts and integrations probe for. Hosts no longer hand-write assembly scans or registry dictionaries.
 
 See [Host integration](guides/host-integration.md) for the generator + DI wiring contract a host is expected to consume.

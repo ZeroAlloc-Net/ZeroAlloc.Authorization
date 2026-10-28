@@ -32,6 +32,7 @@ namespace ZeroAlloc.Authorization.Generated
         {
             global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::MyApp.MinAgePolicy>(services);
             global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::ZeroAlloc.Authorization.AuthorizerFor<global::MyApp.ApplyForLicenseCommand>, global::ZeroAlloc.Authorization.Generated.GeneratedAuthorizerFor_MyApp_ApplyForLicenseCommand>(services);
+            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<global::ZeroAlloc.Authorization.ZeroAllocAuthorizationMarker>(services);
             return services;
         }
     }

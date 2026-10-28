@@ -17,7 +17,7 @@ See also: [policies](../core-concepts/policies.md), [security-context](../core-c
 When a consumer's compilation includes `[Policy]`-decorated classes and `[RequirePolicy]`-decorated request types, the generator emits two artifacts under the `ZeroAlloc.Authorization.Generated` namespace:
 
 1. **One `AuthorizerFor<TRequest>` subclass per `[RequirePolicy]`-decorated type.** Each subclass resolves the named `[Policy]` classes from DI, calls their `EvaluateAsync` in declaration order, and returns the first failure. All policies must allow before the dispatcher returns `Success()` (conjunction).
-2. **`AddZeroAllocAuthorization()` extension on `IServiceCollection`.** Registers every `[Policy]` class as scoped and every emitted `AuthorizerFor<T>` as scoped.
+2. **`AddZeroAllocAuthorization()` extension on `IServiceCollection`.** Registers every `[Policy]` class as scoped and every emitted `AuthorizerFor<T>` as scoped, plus the `ZeroAllocAuthorizationMarker` singleton. The method is emitted even when the compilation has no `[Policy]` or `[RequirePolicy]`; it then registers only the marker, so a composition root can call it before the first policy exists. Hosts and integrations probe the service collection for `ZeroAllocAuthorizationMarker` to know the method ran. Calling it more than once is safe.
 
 Five diagnostics fire at compile time if the consumer's wiring is broken — `ZAUTH001` (unknown policy name), `ZAUTH002` (duplicate policy name), `ZAUTH003` (policy class doesn't implement `IAuthorizationPolicy`), `ZAUTH004` (abstract/static policy class), `ZAUTH005` (`[RequirePolicy]` on a non-class/non-struct target). The host inherits these as a compile-time safety net — wiring mistakes never reach runtime.
 

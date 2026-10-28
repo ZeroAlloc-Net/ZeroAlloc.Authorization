@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -33,6 +34,48 @@ public sealed record DeleteUser(int Id);
     public void Basic_SinglePolicy_SingleRequirePolicy_Snapshot()
     {
         RunAndVerify(BasicSource);
+    }
+
+    [Fact]
+    public void EmptyCompilation_StillEmitsRegistrationWithMarker_Snapshot()
+    {
+        RunAndVerify("namespace MyApp; public sealed class Nothing { }");
+    }
+
+    [Fact]
+    public void EmptyCompilation_EmitsCompilableRegistration()
+    {
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            new[] { CSharpSyntaxTree.ParseText("namespace MyApp; public sealed class Nothing { }") },
+            GetStandardReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = CSharpGeneratorDriver.Create(new PolicyRegistryGenerator().AsSourceGenerator())
+            .RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+
+        Assert.Empty(diagnostics);
+        Assert.Empty(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+        var generated = Assert.Single(driver.GetRunResult().GeneratedTrees).ToString();
+        Assert.Contains("TryAddSingleton<global::ZeroAlloc.Authorization.ZeroAllocAuthorizationMarker>", generated);
+    }
+
+    [Fact]
+    public void EmptyCompilation_WithoutDependencyInjection_EmitsNothing()
+    {
+        var references = GetStandardReferences()
+            .Where(r => !(r.Display ?? "").Contains("Microsoft.Extensions.DependencyInjection"))
+            .ToList();
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            new[] { CSharpSyntaxTree.ParseText("namespace MyApp; public sealed class Nothing { }") },
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = CSharpGeneratorDriver.Create(new PolicyRegistryGenerator().AsSourceGenerator())
+            .RunGenerators(compilation);
+
+        Assert.Empty(driver.GetRunResult().GeneratedTrees);
     }
 
     [Fact]
@@ -97,6 +140,8 @@ public sealed record DeleteUser(int Id);
         // the test compilation cannot semantic-bind [Policy] / [RequirePolicy] / IAuthorizationPolicy.
         _ = typeof(ZeroAlloc.Authorization.PolicyAttribute).FullName;
         _ = typeof(ZeroAlloc.Results.UnitResult<>).FullName;
+        _ = typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).FullName;
+        _ = typeof(Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions).FullName;
 
         var references = new List<MetadataReference>();
         foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())

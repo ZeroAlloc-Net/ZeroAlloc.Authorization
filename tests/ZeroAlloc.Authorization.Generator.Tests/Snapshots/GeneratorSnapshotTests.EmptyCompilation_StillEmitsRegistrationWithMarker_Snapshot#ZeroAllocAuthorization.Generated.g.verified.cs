@@ -8,7 +8,7 @@ namespace ZeroAlloc.Authorization.Generated
 #nullable enable
 namespace ZeroAlloc.Authorization.Generated
 {
-    public static class GeneratedAuthorizationRegistration
+    internal static class GeneratedAuthorizationRegistration
     {
         public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddZeroAllocAuthorization(
             this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)

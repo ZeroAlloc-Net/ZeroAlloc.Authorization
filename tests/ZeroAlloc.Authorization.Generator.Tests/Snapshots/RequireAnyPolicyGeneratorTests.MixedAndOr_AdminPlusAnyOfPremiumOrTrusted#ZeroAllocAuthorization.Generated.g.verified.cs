@@ -47,6 +47,7 @@ namespace ZeroAlloc.Authorization.Generated
             global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::MyApp.PremiumPolicy>(services);
             global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::MyApp.TrustedPolicy>(services);
             global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::ZeroAlloc.Authorization.AuthorizerFor<global::MyApp.ViewBillingQuery>, global::ZeroAlloc.Authorization.Generated.GeneratedAuthorizerFor_MyApp_ViewBillingQuery>(services);
+            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<global::ZeroAlloc.Authorization.ZeroAllocAuthorizationMarker>(services);
             return services;
         }
     }

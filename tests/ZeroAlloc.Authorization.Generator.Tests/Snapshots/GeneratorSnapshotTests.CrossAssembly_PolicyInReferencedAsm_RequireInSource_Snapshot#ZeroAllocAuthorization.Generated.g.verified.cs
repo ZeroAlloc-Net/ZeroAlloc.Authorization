@@ -32,6 +32,7 @@ namespace ZeroAlloc.Authorization.Generated
         {
             global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::SharedKernel.AdminPolicy>(services);
             global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::ZeroAlloc.Authorization.AuthorizerFor<global::MyApp.DeleteUser>, global::ZeroAlloc.Authorization.Generated.GeneratedAuthorizerFor_MyApp_DeleteUser>(services);
+            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<global::ZeroAlloc.Authorization.ZeroAllocAuthorizationMarker>(services);
             return services;
         }
     }

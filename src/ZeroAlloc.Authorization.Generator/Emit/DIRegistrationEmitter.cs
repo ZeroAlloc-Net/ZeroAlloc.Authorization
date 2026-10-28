@@ -31,6 +31,9 @@ internal static class DIRegistrationEmitter
             var req = requires[i];
             sb.AppendLine($"            global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::ZeroAlloc.Authorization.AuthorizerFor<{req.FullyQualifiedTypeName}>, global::ZeroAlloc.Authorization.Generated.GeneratedAuthorizerFor_{req.SafeIdentifier}>(services);");
         }
+        // Always registered, so hosts and integrations can probe whether this method ran, also
+        // when the compilation has no policies. TryAdd keeps a second call a no-op.
+        sb.AppendLine("            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<global::ZeroAlloc.Authorization.ZeroAllocAuthorizationMarker>(services);");
         sb.AppendLine("            return services;");
         sb.AppendLine("        }");
         sb.AppendLine("    }");

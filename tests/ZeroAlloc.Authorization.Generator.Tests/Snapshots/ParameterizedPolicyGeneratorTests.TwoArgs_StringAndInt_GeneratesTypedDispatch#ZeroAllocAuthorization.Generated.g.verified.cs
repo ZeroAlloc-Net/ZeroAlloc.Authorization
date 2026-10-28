@@ -32,6 +32,7 @@ namespace ZeroAlloc.Authorization.Generated
         {
             global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::MyApp.PermissionPolicy>(services);
             global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped<global::ZeroAlloc.Authorization.AuthorizerFor<global::MyApp.ReadDocCommand>, global::ZeroAlloc.Authorization.Generated.GeneratedAuthorizerFor_MyApp_ReadDocCommand>(services);
+            global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<global::ZeroAlloc.Authorization.ZeroAllocAuthorizationMarker>(services);
             return services;
         }
     }

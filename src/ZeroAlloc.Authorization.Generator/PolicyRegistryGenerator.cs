@@ -49,17 +49,7 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
             .Select(static (m, _) => EmitInput.From(m))
             .WithTrackingName(TrackingNames.EmitInputs);
 
-        // AddZeroAllocAuthorization is emitted even for a compilation with no policies, so a
-        // composition root can call it before the first [Policy] exists. That needs the DI
-        // abstractions it extends; a project without them, such as a plain contracts library,
-        // gets no registration class rather than a compile error.
-        var hasDependencyInjection = context.CompilationProvider
-            .Select(static (c, _) => c.GetTypeByMetadataName(ServiceCollectionMetadataName) is not null
-                && c.GetTypeByMetadataName(DescriptorExtensionsMetadataName) is not null);
-
-        context.RegisterSourceOutput(
-            emitInputs.Combine(hasDependencyInjection),
-            static (spc, x) => Emit(spc, x.Left, x.Right));
+        RegisterRegistration(context, emitInputs);
 
         var diagnosticInputs = model
             .Select(static (m, _) => Diagnose(m))
@@ -73,6 +63,27 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         });
     }
 
+    private static void RegisterRegistration(
+        IncrementalGeneratorInitializationContext context,
+        IncrementalValueProvider<EmitInput> emitInputs)
+    {
+        // AddZeroAllocAuthorization is emitted even for a compilation with no policies, so a
+        // composition root can call it before the first [Policy] exists. That needs the DI
+        // abstractions it extends; a project without them gets no registration class rather than
+        // a compile error.
+        //
+        // The generator runs in every project that references the package, so a layered solution
+        // runs it once per layer. The empty case must not shadow or clash with the registration
+        // of a layer that declares policies, so it is internal, and skipped altogether when a
+        // referenced assembly already exposes the registration.
+        var environment = context.CompilationProvider
+            .Select(static (c, _) => RegistrationEnvironment.From(c));
+
+        context.RegisterSourceOutput(
+            emitInputs.Combine(environment),
+            static (spc, x) => Emit(spc, x.Left, x.Right));
+    }
+
     private static IncrementalValuesProvider<RequireDiscovery> FindRequires(
         IncrementalGeneratorInitializationContext context,
         string attributeFullName) =>
@@ -84,15 +95,13 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
             .Where(static x => x is not null)
             .Select(static (x, _) => x!);
 
-    private const string ServiceCollectionMetadataName = "Microsoft.Extensions.DependencyInjection.IServiceCollection";
-    private const string DescriptorExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions";
-
-    private static void Emit(SourceProductionContext spc, EmitInput input, bool hasDependencyInjection)
+    private static void Emit(SourceProductionContext spc, EmitInput input, RegistrationEnvironment environment)
     {
-        if (input.Policies.Count == 0 && input.Requires.Count == 0 && !hasDependencyInjection) return;
+        var isEmpty = input.Policies.Count == 0 && input.Requires.Count == 0;
+        if (isEmpty && (!environment.HasDependencyInjection || environment.ReferencedRegistrationExists)) return;
 
         var authorizers = AuthorizerForEmitter.Emit(input.Requires, BuildPolicyByNameMap(input.Policies));
-        var registration = DIRegistrationEmitter.Emit(input.Policies, input.Requires);
+        var registration = DIRegistrationEmitter.Emit(input.Policies, input.Requires, isEmpty ? "internal" : "public");
 
         spc.AddSource("ZeroAllocAuthorization.Generated.g.cs", SourceText.From(authorizers + registration, System.Text.Encoding.UTF8));
     }
@@ -202,6 +211,31 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
                     }
                 }
             }
+        }
+    }
+
+    private readonly record struct RegistrationEnvironment(bool HasDependencyInjection, bool ReferencedRegistrationExists)
+    {
+        private const string ServiceCollectionMetadataName = "Microsoft.Extensions.DependencyInjection.IServiceCollection";
+        private const string DescriptorExtensionsMetadataName = "Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions";
+        private const string RegistrationMetadataName = "ZeroAlloc.Authorization.Generated.GeneratedAuthorizationRegistration";
+
+        public static RegistrationEnvironment From(Compilation compilation)
+        {
+            var hasDi = compilation.GetTypeByMetadataName(ServiceCollectionMetadataName) is not null
+                && compilation.GetTypeByMetadataName(DescriptorExtensionsMetadataName) is not null;
+
+            // GetTypeByMetadataName returns null when several assemblies declare the name, so ask
+            // for all of them. Internal registrations of other layers do not count: they are not
+            // reachable from here.
+            var referenced = false;
+            foreach (var type in compilation.GetTypesByMetadataName(RegistrationMetadataName))
+            {
+                if (SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly)) continue;
+                if (compilation.IsSymbolAccessibleWithin(type, compilation.Assembly)) { referenced = true; break; }
+            }
+
+            return new RegistrationEnvironment(hasDi, referenced);
         }
     }
 

@@ -39,3 +39,5 @@ ZeroAlloc.Authorization.RequirePolicyAttribute.PolicyArgs.get -> object?[]?
 ZeroAlloc.Authorization.RequirePolicyAttribute.PolicyName.get -> string!
 ZeroAlloc.Authorization.RequirePolicyAttribute.RequirePolicyAttribute(string! policyName) -> void
 ZeroAlloc.Authorization.RequirePolicyAttribute.RequirePolicyAttribute(string! policyName, params object?[]! args) -> void
+ZeroAlloc.Authorization.ZeroAllocAuthorizationMarker
+ZeroAlloc.Authorization.ZeroAllocAuthorizationMarker.ZeroAllocAuthorizationMarker() -> void

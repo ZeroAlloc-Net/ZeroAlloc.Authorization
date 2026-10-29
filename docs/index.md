@@ -43,7 +43,7 @@ The package is the full stack — contract types **plus** a bundled Roslyn gener
 - Five contract types: `ISecurityContext`, `IAuthorizationPolicy`, `[Policy]`, `[RequirePolicy]`, `AnonymousSecurityContext`.
 - One dispatcher base: `AuthorizerFor<TRequest>` (abstract; the generator emits concrete subclasses).
 - One generator-emitted DI extension: `services.AddZeroAllocAuthorization()`, always generated, which registers the policies, the authorizers and a `ZeroAllocAuthorizationMarker` that hosts probe for.
-- Eight compile-time diagnostics: `ZAUTH001`–`ZAUTH008`.
+- Nine compile-time diagnostics: `ZAUTH001`–`ZAUTH009`.
 - v2.1 extensions: `[RequireAnyPolicy]` (OR composition),
   `IAuthorizationPolicy<T1...>` (parameterized policies, arity 1–3), and
   `IResourceSecurityContext<TResource>` (resource-based authorization,
@@ -66,7 +66,7 @@ If you need an integration that does not exist yet, write a host. The dispatch s
 - [Policies](core-concepts/policies.md) — `IAuthorizationPolicy`, async-only contract, structured deny.
 - [Security context](core-concepts/security-context.md) — `ISecurityContext`, host-specific subinterfaces, the anonymous singleton.
 - [Attributes](attributes.md) — `[Policy]`, `[RequirePolicy]`, and `[RequireAnyPolicy]` reference.
-- [Host integration](guides/host-integration.md) — how the generator + DI extension fit together.
+- [Host integration](guides/host-integration.md) — how the generator + DI extension fit together, and how a library that ships policies keeps its registration internal.
 
 ### v2.1 core-concepts
 
@@ -79,6 +79,7 @@ If you need an integration that does not exist yet, write a host. The dispatch s
 - [`ZAUTH006`](diagnostics/ZAUTH006.md) — `[RequireAnyPolicy]` with a single policy name (Warning).
 - [`ZAUTH007`](diagnostics/ZAUTH007.md) — `[RequirePolicy]` argument shape doesn't match policy interface (Error).
 - [`ZAUTH008`](diagnostics/ZAUTH008.md) — `[Policy]` class implements multiple `IAuthorizationPolicy` variants (Error).
+- [`ZAUTH009`](diagnostics/ZAUTH009.md) — invalid `ZeroAllocAuthorizationRegistration` value (Warning).
 
 ---
 

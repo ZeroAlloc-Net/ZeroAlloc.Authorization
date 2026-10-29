@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Threading;
 using Microsoft.CodeAnalysis;
@@ -28,11 +30,50 @@ internal sealed record ReferenceScan(
 {
     private const string ScanAssemblyName = "ZeroAlloc.Authorization.Generator.ReferenceScan";
 
-    public static ReferenceScan Run(ImmutableArray<MetadataReference> references, CancellationToken ct)
+    public static ReferenceScan Run(ImmutableArray<MetadataReference> references, ScanTarget target, CancellationToken ct)
     {
-        var compilation = CSharpCompilation.Create(ScanAssemblyName, references: references);
-        return new ReferenceScan(
-            PolicySymbolWalker.FindInReferences(compilation, ct),
-            RequireSymbolWalker.FindInReferences(compilation, ct));
+        // The scan compilation takes the identity of the real one, so that a reference which
+        // makes its internals visible to the real assembly makes them visible here too.
+        var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary);
+        if (target.PublicKey.Length > 0)
+        {
+            options = options.WithCryptoPublicKey(ImmutableArray.Create(Convert.FromBase64String(target.PublicKey)));
+        }
+        var compilation = CSharpCompilation.Create(target.AssemblyName, references: references, options: options);
+
+        var inaccessibleNames = new HashSet<string>(StringComparer.Ordinal);
+        var policies = PolicySymbolWalker.FindInReferences(compilation, inaccessibleNames, ct);
+        var requires = RequireSymbolWalker.FindInReferences(compilation, ct);
+
+        // A request that needs a policy the compilation cannot use has no valid authorizer here.
+        // The assembly that declares both registers it itself, so it is left out, not diagnosed.
+        if (inaccessibleNames.Count > 0)
+        {
+            var known = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var p in policies)
+            {
+                if (p.Policy is { } policy) known.Add(policy.PolicyName);
+            }
+            var kept = new List<RequireDiscovery>(requires.Count);
+            foreach (var r in requires)
+            {
+                if (!NeedsInaccessible(r, inaccessibleNames, known)) kept.Add(r);
+            }
+            requires = new EquatableArray<RequireDiscovery>(kept.ToArray());
+        }
+        return new ReferenceScan(policies, requires);
+    }
+
+    private static bool NeedsInaccessible(RequireDiscovery request, HashSet<string> inaccessible, HashSet<string> known)
+    {
+        if (request.Require is not { } require) return false;
+        foreach (var group in require.Groups)
+        {
+            foreach (var name in group.PolicyNames)
+            {
+                if (inaccessible.Contains(name) && !known.Contains(name)) return true;
+            }
+        }
+        return false;
     }
 }

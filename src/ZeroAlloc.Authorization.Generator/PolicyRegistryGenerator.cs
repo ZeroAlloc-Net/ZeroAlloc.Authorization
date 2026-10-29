@@ -34,7 +34,8 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         // walk is keyed on the references alone and reruns only when they change.
         var references = context.MetadataReferencesProvider
             .Collect()
-            .Select(static (refs, ct) => ReferenceScan.Run(refs, ct))
+            .Combine(context.CompilationProvider.Select(static (c, _) => ScanTarget.From(c)))
+            .Select(static (x, ct) => ReferenceScan.Run(x.Left, x.Right, ct))
             .WithTrackingName(TrackingNames.ReferenceScan);
 
         var model = sourcePolicies.Collect()

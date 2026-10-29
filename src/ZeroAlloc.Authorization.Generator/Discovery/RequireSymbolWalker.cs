@@ -26,17 +26,23 @@ internal static class RequireSymbolWalker
     /// <summary>
     /// The requests declared in the compilation's referenced assemblies, in walk order.
     /// </summary>
+    /// <remarks>
+    /// Only requests the compilation can use are listed: the generated authorizer names the
+    /// request type. An internal request of a referenced
+    /// assembly would not compile there.
+    /// </remarks>
     public static EquatableArray<RequireDiscovery> FindInReferences(Compilation compilation, CancellationToken ct)
     {
         var context = WalkContext.Create(compilation);
         if (context is null) return EquatableArray<RequireDiscovery>.Empty;
 
+        var within = compilation.Assembly;
         var results = new List<RequireDiscovery>();
         foreach (var refAsm in compilation.SourceModule.ReferencedAssemblySymbols)
         {
             TypeWalker.Walk(refAsm.GlobalNamespace, type =>
             {
-                if (ProcessType(type, context) is { } found) results.Add(found);
+                if (ProcessType(type, context) is { } found && TypeAccess.IsAccessible(type, within, compilation)) results.Add(found);
             }, ct);
         }
         return new EquatableArray<RequireDiscovery>(results.ToArray());

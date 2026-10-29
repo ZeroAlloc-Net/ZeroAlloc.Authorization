@@ -12,7 +12,7 @@ Source-generated authorization policies for any .NET host — policy names check
 ## Why ZeroAlloc.Authorization
 
 - **0 B per authorization check.** `AllocationGate` tests assert a 0-byte budget on every run for the allow and deny paths, a parameterized policy and an any-of group.
-- **A typo is a build error, not a 403 in production.** Requiring a policy name that no `[Policy]` declares fails the build (`ZAUTH001`); eight generator diagnostics in total catch wiring mistakes at compile time.
+- **A typo is a build error, not a 403 in production.** Requiring a policy name that no `[Policy]` declares fails the build (`ZAUTH001`); nine generator diagnostics in total catch wiring mistakes at compile time.
 - **No reflection, works under NativeAOT and trimming.** The bundled generator emits one dispatcher per request type plus the DI registrations. The library builds with `IsAotCompatible`, and CI publishes and runs a `PublishAot=true` sample on every run.
 - **Not tied to ASP.NET Core.** Policies see a small `ISecurityContext` (id, roles, claims). Mediators, agent tool calls and your own dispatchers can all evaluate the same policies.
 

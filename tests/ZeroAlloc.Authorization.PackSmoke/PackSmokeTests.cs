@@ -123,6 +123,167 @@ public sealed class PackSmokeTests : IDisposable
             $"Backward-compat scenario must still build.\nSTDOUT:\n{build.StdOut}\nSTDERR:\n{build.StdErr}");
     }
 
+    // A library that ships [Policy] classes and an app that references it and has policies of
+    // its own: both run the generator. With the library's registration public, the app's call to
+    // AddZeroAllocAuthorization is ambiguous, CS0121. The library opts out with
+    // <ZeroAllocAuthorizationRegistration>internal</ZeroAllocAuthorizationRegistration>, which
+    // only works when the package makes the property visible to the generator.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Library_with_internal_registration_and_app_with_policies_builds_without_CS0121(bool useStandaloneGenerator)
+    {
+        var repoRoot = LocateRepoRoot();
+        PackProject(Path.Combine(repoRoot, "src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj"));
+        if (useStandaloneGenerator)
+        {
+            PackProject(Path.Combine(repoRoot, "src/ZeroAlloc.Authorization.Generator/ZeroAlloc.Authorization.Generator.csproj"));
+        }
+
+        ScaffoldLibraryAndApp(useStandaloneGenerator);
+
+        var appCsproj = Path.Combine(_workDir, "src/TestLib.App/TestLib.App.csproj");
+        var build = RunDotnet($"build \"{appCsproj}\" -c Release", _workDir);
+        Assert.True(build.ExitCode == 0,
+            $"Expected the app to build; got CS0121 or another error.\nSTDOUT:\n{build.StdOut}\nSTDERR:\n{build.StdErr}");
+        Assert.DoesNotContain("CS0121", build.StdOut, StringComparison.Ordinal);
+
+        // The app's call binds to the app's own registration, which registers the app's policy.
+        var appGenerated = Directory.GetFiles(Path.Combine(_workDir, "src/TestLib.App"), "ZeroAllocAuthorization.Generated.g.cs", SearchOption.AllDirectories);
+        var appSource = File.ReadAllText(Assert.Single(appGenerated));
+        Assert.Contains("public static class GeneratedAuthorizationRegistration", appSource, StringComparison.Ordinal);
+        Assert.Contains("AddScoped<global::TestLib.App.AppPolicy>", appSource, StringComparison.Ordinal);
+        // The app's registration also registers the library's policies, found through the reference.
+        Assert.Contains("AddScoped<global::TestLib.Library.LibraryPolicy>", appSource, StringComparison.Ordinal);
+
+        var libraryGenerated = Directory.GetFiles(Path.Combine(_workDir, "src/TestLib.Library"), "ZeroAllocAuthorization.Generated.g.cs", SearchOption.AllDirectories);
+        var librarySource = File.ReadAllText(Assert.Single(libraryGenerated));
+        Assert.Contains("internal static class GeneratedAuthorizationRegistration", librarySource, StringComparison.Ordinal);
+    }
+
+    private void ScaffoldLibraryAndApp(bool useStandaloneGenerator)
+    {
+        var src = Path.Combine(_workDir, "src");
+        Directory.CreateDirectory(src);
+        WriteNuGetConfig();
+
+        if (useStandaloneGenerator)
+        {
+            File.WriteAllText(Path.Combine(_workDir, "Directory.Build.props"), """
+                <Project>
+                  <PropertyGroup>
+                    <ZeroAllocAuthorizationDisableBundledAnalyzer>true</ZeroAllocAuthorizationDisableBundledAnalyzer>
+                  </PropertyGroup>
+                </Project>
+                """);
+        }
+
+        var ownsPolicies = useStandaloneGenerator
+            ? "<ZeroAllocAuthorizationOwnsPolicies>true</ZeroAllocAuthorizationOwnsPolicies>"
+            : "";
+        var generatorRef = useStandaloneGenerator
+            ? $"""<PackageReference Include="ZeroAlloc.Authorization.Generator" Version="{_testVersion}" />"""
+            : "";
+
+        var libDir = Path.Combine(src, "TestLib.Library");
+        Directory.CreateDirectory(libDir);
+        File.WriteAllText(Path.Combine(libDir, "TestLib.Library.csproj"), $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+                <ZeroAllocAuthorizationRegistration>internal</ZeroAllocAuthorizationRegistration>
+                {ownsPolicies}
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="ZeroAlloc.Authorization" Version="{_testVersion}" />
+                <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+                {generatorRef}
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(libDir, "LibraryPolicy.cs"), """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using ZeroAlloc.Authorization;
+            using ZeroAlloc.Authorization.Generated;
+            using ZeroAlloc.Results;
+
+            namespace TestLib.Library;
+
+            [Policy("library.read")]
+            public sealed class LibraryPolicy : IAuthorizationPolicy
+            {
+                public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+                    ISecurityContext ctx, CancellationToken ct)
+                    => new(UnitResult<AuthorizationFailure>.Success());
+            }
+
+            public static class LibraryWiring
+            {
+                public static IServiceCollection AddLibrary(IServiceCollection s)
+                    => s.AddZeroAllocAuthorization();
+            }
+            """);
+
+        var appDir = Path.Combine(src, "TestLib.App");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "TestLib.App.csproj"), $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+                {ownsPolicies}
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="..\TestLib.Library\TestLib.Library.csproj" />
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(appDir, "AppPolicy.cs"), """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Microsoft.Extensions.DependencyInjection;
+            using ZeroAlloc.Authorization;
+            using ZeroAlloc.Authorization.Generated;
+            using ZeroAlloc.Results;
+
+            namespace TestLib.App;
+
+            [Policy("app.admin")]
+            public sealed class AppPolicy : IAuthorizationPolicy
+            {
+                public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
+                    ISecurityContext ctx, CancellationToken ct)
+                    => new(UnitResult<AuthorizationFailure>.Success());
+            }
+
+            [RequirePolicy("app.admin")]
+            public sealed record AppCommand(int Value);
+
+            public static class Wire
+            {
+                public static IServiceCollection AddApp(IServiceCollection s)
+                    => s.AddZeroAllocAuthorization();
+            }
+            """);
+    }
+
+    private void WriteNuGetConfig() =>
+        File.WriteAllText(Path.Combine(_workDir, "NuGet.config"), $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="local" value="{_feed}" />
+                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+
     private void PackProject(string csproj)
         => PackProject(csproj, _testVersion);
 
@@ -142,16 +303,7 @@ public sealed class PackSmokeTests : IDisposable
         var src = Path.Combine(_workDir, "src");
         Directory.CreateDirectory(src);
 
-        File.WriteAllText(Path.Combine(_workDir, "NuGet.config"), $"""
-            <?xml version="1.0" encoding="utf-8"?>
-            <configuration>
-              <packageSources>
-                <clear />
-                <add key="local" value="{_feed}" />
-                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-              </packageSources>
-            </configuration>
-            """);
+        WriteNuGetConfig();
 
         // Split-package idiom (2.0.1+): consumer opts in via two MSBuild properties.
         //   * Directory.Build.props at the work-dir root sets

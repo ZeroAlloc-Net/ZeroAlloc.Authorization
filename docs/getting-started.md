@@ -122,7 +122,7 @@ public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(
 
 ## Generator diagnostics
 
-The generator emits eight compile-time diagnostics to catch wiring mistakes before they hit production:
+The generator emits nine compile-time diagnostics to catch wiring mistakes before they hit production:
 
 | ID | Fires when |
 |---|---|
@@ -134,6 +134,7 @@ The generator emits eight compile-time diagnostics to catch wiring mistakes befo
 | [`ZAUTH006`](diagnostics/ZAUTH006.md) | `[RequireAnyPolicy]` lists a single policy name; use `[RequirePolicy]` instead. Warning. |
 | [`ZAUTH007`](diagnostics/ZAUTH007.md) | `[RequirePolicy("X", ...)]` arguments don't match the shape of the policy's `IAuthorizationPolicy<…>` interface. |
 | [`ZAUTH008`](diagnostics/ZAUTH008.md) | A `[Policy]` class implements more than one `IAuthorizationPolicy` variant. |
+| [`ZAUTH009`](diagnostics/ZAUTH009.md) | The `ZeroAllocAuthorizationRegistration` MSBuild property is neither `public` nor `internal`. Warning. |
 
 ## Next
 

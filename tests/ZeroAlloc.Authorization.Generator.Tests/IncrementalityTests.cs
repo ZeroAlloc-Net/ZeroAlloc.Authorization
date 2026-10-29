@@ -23,6 +23,7 @@ public sealed class IncrementalityTests
         "ReferenceScan",
         "EmitInputs",
         "DiagnosticInputs",
+        "RegistrationOptions",
     ];
 
     private const string PolicyFile = """
@@ -203,6 +204,64 @@ public sealed class IncrementalityTests
     }
 
     [Fact]
+    public void ChangedRegistrationProperty_ReachesTheOutput_ButLeavesDiscoveryCached()
+    {
+        var compilation = CreateCompilation(
+            CSharpSyntaxTree.ParseText(PolicyFile, path: "/src/Policies.cs"),
+            CSharpSyntaxTree.ParseText(RequestFile, path: "/src/Requests.cs"));
+
+        var driver = CreateDriver(BuildProperties.Registration(null)).RunGenerators(compilation);
+        Assert.Contains("public static class GeneratedAuthorizationRegistration", Generated(driver.GetRunResult()), StringComparison.Ordinal);
+
+        var result = driver
+            .WithUpdatedAnalyzerConfigOptions(BuildProperties.Registration("internal"))
+            .RunGenerators(compilation)
+            .GetRunResult();
+
+        Assert.Contains("internal static class GeneratedAuthorizationRegistration", Generated(result), StringComparison.Ordinal);
+        var steps = result.Results[0].TrackedSteps;
+        Assert.All(Assert.Single(steps["RegistrationOptions"]).Outputs, o => Assert.Equal(IncrementalStepRunReason.Modified, o.Reason));
+        foreach (var name in new[] { "ReferenceScan", "EmitInputs", "DiagnosticInputs" })
+        {
+            foreach (var step in steps[name])
+            {
+                foreach (var (_, reason) in step.Outputs)
+                {
+                    Assert.True(
+                        reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged,
+                        $"step {name} was {reason}");
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void SameRegistrationPropertyAgain_LeavesTheOutputCached()
+    {
+        var compilation = CreateCompilation(CSharpSyntaxTree.ParseText(PolicyFile, path: "/src/Policies.cs"));
+
+        var driver = CreateDriver(BuildProperties.Registration("internal")).RunGenerators(compilation);
+        var result = driver
+            .WithUpdatedAnalyzerConfigOptions(BuildProperties.Registration("Internal"))
+            .RunGenerators(compilation)
+            .GetRunResult();
+
+        Assert.All(Assert.Single(result.Results[0].TrackedSteps["RegistrationOptions"]).Outputs, o => Assert.True(
+            o.Reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged,
+            $"RegistrationOptions was {o.Reason}"));
+        foreach (var (_, runs) in result.Results[0].TrackedOutputSteps)
+        {
+            foreach (var run in runs)
+            {
+                foreach (var (_, reason) in run.Outputs)
+                {
+                    Assert.Equal(IncrementalStepRunReason.Cached, reason);
+                }
+            }
+        }
+    }
+
+    [Fact]
     public void TrackedSteps_HoldNoSymbolsSyntaxOrCompilations()
     {
         // A model that holds a symbol, a syntax node or a compilation keeps that compilation
@@ -247,9 +306,10 @@ public sealed class IncrementalityTests
         }
     }
 
-    private static GeneratorDriver CreateDriver() =>
+    private static GeneratorDriver CreateDriver(BuildProperties? properties = null) =>
         CSharpGeneratorDriver.Create(
             [new PolicyRegistryGenerator().AsSourceGenerator()],
+            optionsProvider: properties,
             driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
 
     private static string Generated(GeneratorDriverRunResult result) =>

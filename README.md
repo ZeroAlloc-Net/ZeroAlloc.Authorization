@@ -12,7 +12,7 @@ Source-generated authorization policies for any .NET host — policy names check
 ## Why ZeroAlloc.Authorization
 
 - **0 B per authorization check.** `AllocationGate` tests assert a 0-byte budget on every run for the allow and deny paths, a parameterized policy and an any-of group.
-- **A typo is a build error, not a 403 in production.** Requiring a policy name that no `[Policy]` declares fails the build (`ZAUTH001`); eight generator diagnostics in total catch wiring mistakes at compile time.
+- **A typo is a build error, not a 403 in production.** Requiring a policy name that no `[Policy]` declares fails the build (`ZAUTH001`); nine generator diagnostics in total catch wiring mistakes at compile time.
 - **No reflection, works under NativeAOT and trimming.** The bundled generator emits one dispatcher per request type plus the DI registrations. The library builds with `IsAotCompatible`, and CI publishes and runs a `PublishAot=true` sample on every run.
 - **Not tied to ASP.NET Core.** Policies see a small `ISecurityContext` (id, roles, claims). Mediators, agent tool calls and your own dispatchers can all evaluate the same policies.
 
@@ -59,6 +59,23 @@ public sealed record DeleteUser(string UserId);
 `[Policy]` class and the `[RequirePolicy]` request and wrote the dispatch for you. Rename the policy
 without updating the request and the build fails.
 
+### Shipping policies in a library
+
+A project that declares policies emits `AddZeroAllocAuthorization()` as `public`, so a host can call
+the registration of the layer it references. A library that ships `[Policy]` classes to apps with
+policies of their own, such as a NuGet package, must keep it internal. Otherwise the app's call fails
+with `CS0121: The call is ambiguous between ... AddZeroAllocAuthorization(IServiceCollection) and ...
+AddZeroAllocAuthorization(IServiceCollection)`. Set this in the library's project file:
+
+```xml
+<PropertyGroup>
+  <ZeroAllocAuthorizationRegistration>internal</ZeroAllocAuthorizationRegistration>
+</PropertyGroup>
+```
+
+The app's own registration still registers the library's policies, because the generator sees them in
+the reference. See [Host integration](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/docs/guides/host-integration.md#libraries-that-ship-policies).
+
 ## What you get
 
 - **Named policies** with `[Policy("Name")]`, bound to request types with `[RequirePolicy("Name")]`. Stack several and all must allow.
@@ -71,7 +88,7 @@ without updating the request and the build fails.
 - **Mediator integration:** [ZeroAlloc.Mediator.Authorization](https://github.com/ZeroAlloc-Net/ZeroAlloc.Mediator/tree/main/src/ZeroAlloc.Mediator.Authorization) runs these policies as a pipeline behavior before the handler of any request that carries `[RequirePolicy]`.
 - **Used by** [AI.Sentinel](https://github.com/MarcelRoozekrans/AI.Sentinel) for tool-call authorization of `IChatClient`-based agents.
 
-Diagnostics `ZAUTH001`–`ZAUTH008` are listed in [Getting started](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/docs/getting-started.md#generator-diagnostics).
+Diagnostics `ZAUTH001`–`ZAUTH009` are listed in [Getting started](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/blob/main/docs/getting-started.md#generator-diagnostics).
 
 ## Performance
 

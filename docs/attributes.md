@@ -129,7 +129,7 @@ See [OR composition](core-concepts/or-composition.md).
 
 ## Generator diagnostics
 
-Eight compile-time diagnostics flag wiring mistakes before runtime:
+Nine compile-time diagnostics flag wiring mistakes before runtime:
 
 | ID | Severity | Fires when |
 |---|---|---|
@@ -141,6 +141,7 @@ Eight compile-time diagnostics flag wiring mistakes before runtime:
 | [`ZAUTH006`](diagnostics/ZAUTH006.md) | Warning | `[RequireAnyPolicy]` lists a single policy name (use `[RequirePolicy]`). |
 | [`ZAUTH007`](diagnostics/ZAUTH007.md) | Error | `[RequirePolicy("Name", ...)]` arg shape (arity or type) doesn't match the `[Policy]` class's interface. |
 | [`ZAUTH008`](diagnostics/ZAUTH008.md) | Error | A `[Policy]` class implements multiple `IAuthorizationPolicy` variants. |
+| [`ZAUTH009`](diagnostics/ZAUTH009.md) | Warning | The `ZeroAllocAuthorizationRegistration` MSBuild property is neither `public` nor `internal`. |
 
 ### Release tracking
 

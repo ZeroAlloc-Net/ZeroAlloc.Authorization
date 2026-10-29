@@ -48,7 +48,11 @@ public sealed class LayeredRegistrationTests
 
     private static Layer Build(string name, string source, params Layer[] references) => Build(name, source, true, references);
 
-    private static Layer Build(string name, string source, bool runGenerator, params Layer[] references)
+    private static Layer Build(string name, string source, bool runGenerator, params Layer[] references) =>
+        Build(name, source, runGenerator, registration: null, references);
+
+    // registration is the project's ZeroAllocAuthorizationRegistration property, null when unset.
+    private static Layer Build(string name, string source, bool runGenerator, string? registration, params Layer[] references)
     {
         var refs = StandardReferences().Concat(references.Select(r => r.Output.ToMetadataReference())).ToList();
         var compilation = CSharpCompilation.Create(
@@ -60,12 +64,14 @@ public sealed class LayeredRegistrationTests
         var generated = string.Empty;
         if (runGenerator)
         {
-            var driver = CSharpGeneratorDriver.Create(new PolicyRegistryGenerator().AsSourceGenerator())
+            var driver = CSharpGeneratorDriver.Create(
+                    new[] { new PolicyRegistryGenerator().AsSourceGenerator() },
+                    optionsProvider: BuildProperties.Registration(registration))
                 .RunGeneratorsAndUpdateCompilation(compilation, out output, out _);
             generated = string.Concat(driver.GetRunResult().GeneratedTrees.Select(t => t.ToString()));
         }
         var problems = output.GetDiagnostics()
-            .Where(d => d.Severity == DiagnosticSeverity.Error || d.Id is "CS0436" or "CS0433")
+            .Where(d => d.Severity == DiagnosticSeverity.Error || d.Id is "CS0436" or "CS0433" or "CS0121")
             .ToList();
         return new Layer(name, output, generated, problems);
     }
@@ -156,6 +162,125 @@ public sealed class LayeredRegistrationTests
         var project = Build("Project", Plain, first, second);
 
         Assert.Equal(string.Empty, project.Generated);
+    }
+
+    // A library that ships [Policy] classes, such as a NuGet package, and an app that references
+    // it and declares policies of its own. Both run the generator, and the app calls the
+    // registration the way a composition root does.
+    private const string LibraryPolicies = """
+        using System.Threading;
+        using System.Threading.Tasks;
+        using ZeroAlloc.Authorization;
+        using ZeroAlloc.Results;
+        namespace Library;
+
+        [Policy("library.read")]
+        public sealed class LibraryReadPolicy : IAuthorizationPolicy
+        {
+            public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(ISecurityContext ctx, CancellationToken ct = default)
+                => new(UnitResult<AuthorizationFailure>.Success());
+        }
+
+        [RequirePolicy("library.read")]
+        public sealed record ReadThing(int Id);
+
+        public static class LibraryWiring
+        {
+            public static Microsoft.Extensions.DependencyInjection.IServiceCollection AddLibrary(Microsoft.Extensions.DependencyInjection.IServiceCollection services)
+                => ZeroAlloc.Authorization.Generated.GeneratedAuthorizationRegistration.AddZeroAllocAuthorization(services);
+        }
+        """;
+
+    private const string AppWithPolicy = """
+        using System.Threading;
+        using System.Threading.Tasks;
+        using Microsoft.Extensions.DependencyInjection;
+        using ZeroAlloc.Authorization;
+        using ZeroAlloc.Authorization.Generated;
+        using ZeroAlloc.Results;
+        namespace App;
+
+        public static class Wiring
+        {
+            public static IServiceCollection Wire(IServiceCollection services) => services.AddZeroAllocAuthorization();
+        }
+
+        [Policy("admin")]
+        public sealed class AdminPolicy : IAuthorizationPolicy
+        {
+            public ValueTask<UnitResult<AuthorizationFailure>> EvaluateAsync(ISecurityContext ctx, CancellationToken ct = default)
+                => new(UnitResult<AuthorizationFailure>.Success());
+        }
+
+        [RequirePolicy("admin")]
+        public sealed record DeleteUser(int Id);
+        """;
+
+    // The problem the property solves: both registrations are public, so the app's call is ambiguous.
+    [Fact]
+    public void LibraryWithDefaultRegistration_AndAppWithOwnPolicy_CallIsAmbiguous()
+    {
+        var library = Build("Library", LibraryPolicies);
+        var app = Build("App", AppWithPolicy, library);
+
+        Assert.Empty(library.Diagnostics);
+        Assert.Contains(app.Diagnostics, d => d.Id == "CS0121");
+    }
+
+    [Fact]
+    public void LibraryWithInternalRegistration_AndAppWithOwnPolicy_AppBindsToItsOwnRegistration()
+    {
+        var library = Build("Library", LibraryPolicies, true, "internal");
+        var app = Build("App", AppWithPolicy, library);
+
+        Assert.Empty(library.Diagnostics);
+        Assert.Contains("internal static class GeneratedAuthorizationRegistration", library.Generated);
+        Assert.Contains("AddScoped<global::Library.LibraryReadPolicy>", library.Generated);
+
+        Assert.Empty(app.Diagnostics);
+        Assert.Equal("App", BoundAssembly(app));
+        Assert.Contains("public static class GeneratedAuthorizationRegistration", app.Generated);
+        Assert.Contains("AddScoped<global::App.AdminPolicy>", app.Generated);
+        Assert.Contains("AuthorizerFor<global::App.DeleteUser>", app.Generated);
+        // The app's registration also covers the policies it sees in the library.
+        Assert.Contains("AddScoped<global::Library.LibraryReadPolicy>", app.Generated);
+    }
+
+    [Fact]
+    public void LibraryWithInternalRegistration_AndAppThatIsInternalToo_EachBindsToItsOwn()
+    {
+        var library = Build("Library", LibraryPolicies, true, "internal");
+        var app = Build("App", AppWithPolicy, true, "internal", library);
+
+        Assert.Empty(app.Diagnostics);
+        Assert.Equal("App", BoundAssembly(app));
+        Assert.Contains("internal static class GeneratedAuthorizationRegistration", app.Generated);
+    }
+
+    [Fact]
+    public void EmptyLayer_AboveAnInternalRegistration_StillEmitsItsOwn()
+    {
+        // A registration that did not come from this generator and is internal: it is not
+        // reachable from the project, so it must not stand in for the project's own.
+        const string Provider = "namespace ZeroAlloc.Authorization.Generated { internal static class GeneratedAuthorizationRegistration { } }";
+        var provider = BuildPlain("Provider", Provider);
+        var project = Build("Project", Host, provider);
+
+        Assert.Contains("internal static class GeneratedAuthorizationRegistration", project.Generated);
+        Assert.Empty(project.Diagnostics);
+        Assert.Equal("Project", BoundAssembly(project));
+    }
+
+    [Fact]
+    public void EmptyLayer_AboveAKernelWithTheInternalProperty_StillEmitsItsOwn()
+    {
+        var kernel = Build("Kernel", Plain, true, "internal");
+        var project = Build("Project", Host, kernel);
+
+        Assert.Contains("internal static class GeneratedAuthorizationRegistration", kernel.Generated);
+        Assert.Contains("internal static class GeneratedAuthorizationRegistration", project.Generated);
+        Assert.Empty(project.Diagnostics);
+        Assert.Equal("Project", BoundAssembly(project));
     }
 
     private static Layer BuildPlain(string name, string source)

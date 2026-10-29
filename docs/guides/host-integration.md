@@ -19,9 +19,47 @@ When a consumer's compilation includes `[Policy]`-decorated classes and `[Requir
 1. **One `AuthorizerFor<TRequest>` subclass per `[RequirePolicy]`-decorated type.** Each subclass resolves the named `[Policy]` classes from DI, calls their `EvaluateAsync` in declaration order, and returns the first failure. All policies must allow before the dispatcher returns `Success()` (conjunction).
 2. **`AddZeroAllocAuthorization()` extension on `IServiceCollection`.** Registers every `[Policy]` class as scoped and every emitted `AuthorizerFor<T>` as scoped, plus the `ZeroAllocAuthorizationMarker` singleton. The method is emitted even when the compilation has no `[Policy]` or `[RequirePolicy]`; it then registers only the marker, so a composition root can call it before the first policy exists. Hosts and integrations probe the service collection for `ZeroAllocAuthorizationMarker` to know the method ran. Calling it more than once is safe.
 
-    In a layered solution the generator runs in every project that references the package. A project with no `[Policy]` and no `[RequirePolicy]` emits the registration as `internal`, so it never leaks to the projects above it, and emits nothing at all when a referenced assembly already exposes `GeneratedAuthorizationRegistration`. A project that declares or sees policies emits it `public`. The host therefore always binds to the registration of the layer that has the policies.
+    In a layered solution the generator runs in every project that references the package. A project with no `[Policy]` and no `[RequirePolicy]` emits the registration as `internal`, so it never leaks to the projects above it, and emits nothing at all when a referenced assembly already exposes `GeneratedAuthorizationRegistration`. A project that declares or sees policies emits it `public`. The host therefore always binds to the registration of the layer that has the policies. A library that ships policies to other apps opts out of the `public` registration, see [Libraries that ship policies](#libraries-that-ship-policies).
 
-Five diagnostics fire at compile time if the consumer's wiring is broken — `ZAUTH001` (unknown policy name), `ZAUTH002` (duplicate policy name), `ZAUTH003` (policy class doesn't implement `IAuthorizationPolicy`), `ZAUTH004` (abstract/static policy class), `ZAUTH005` (`[RequirePolicy]` on a non-class/non-struct target). The host inherits these as a compile-time safety net — wiring mistakes never reach runtime.
+Nine diagnostics fire at compile time if the consumer's wiring is broken — `ZAUTH001` (unknown policy name), `ZAUTH002` (duplicate policy name), `ZAUTH003` (policy class doesn't implement `IAuthorizationPolicy`), `ZAUTH004` (abstract/static policy class), `ZAUTH005` (`[RequirePolicy]` on a non-class/non-struct target), `ZAUTH006` (`[RequireAnyPolicy]` with a single policy name), `ZAUTH007` (argument shape doesn't match the policy interface), `ZAUTH008` (policy class implements several `IAuthorizationPolicy` variants), `ZAUTH009` (invalid `ZeroAllocAuthorizationRegistration` value). The host inherits these as a compile-time safety net — wiring mistakes never reach runtime.
+
+---
+
+## Libraries that ship policies
+
+A library that declares `[Policy]` classes, such as a NuGet package, runs the generator too, and by default emits a `public` `GeneratedAuthorizationRegistration`. An app that references the library and declares policies of its own emits a second one. Both declare the same extension method in the same namespace, so the app's call does not compile:
+
+```text
+error CS0121: The call is ambiguous between the following methods or properties:
+'ZeroAlloc.Authorization.Generated.GeneratedAuthorizationRegistration.AddZeroAllocAuthorization(IServiceCollection)' and
+'ZeroAlloc.Authorization.Generated.GeneratedAuthorizationRegistration.AddZeroAllocAuthorization(IServiceCollection)'
+```
+
+Renaming or wrapping the class does not help: the extension method signature stays the same. The library sets the `ZeroAllocAuthorizationRegistration` MSBuild property instead:
+
+```xml
+<PropertyGroup>
+  <ZeroAllocAuthorizationRegistration>internal</ZeroAllocAuthorizationRegistration>
+</PropertyGroup>
+```
+
+| Value | Registration |
+|---|---|
+| unset or empty | `public` when the project declares or sees policies or `[RequirePolicy]` types, `internal` when it has none. The default. |
+| `public` | The same as unset, stated explicitly. |
+| `internal` | Always `internal`. |
+
+The value is case-insensitive. Any other value raises [`ZAUTH009`](../diagnostics/ZAUTH009.md) and the default applies.
+
+With the library's registration internal:
+
+- the library can still call `AddZeroAllocAuthorization()` itself, for instance from its own `AddMyLibrary()` extension;
+- the app's call binds to the app's own registration, which registers the app's policies **and** the library's, because the generator sees the library's `[Policy]` classes in the reference;
+- the reference scan adds the library's `[Policy]` classes to the model of every project above it, so such a project emits a `public` registration of its own. An internal referenced registration does not count as "a referenced assembly already exposes the registration"; that rule only matters above layers without policies, where the project emits its own internal, empty registration.
+
+Set it in every library that ships policies to apps you do not control. An application's own policy layer in a layered solution keeps the default, so its host can call the layer's registration. A project that the library grants `InternalsVisibleTo` sees the library's internal registration. Any such friend that runs the generator also emits its own registration for the library's policies, so a friend calling `AddZeroAllocAuthorization()` gets `CS0121`, whether or not it has policies of its own. If the library has `[RequirePolicy]` types, the friend also gets `CS0436` for the re-emitted `GeneratedAuthorizerFor_*` types, an error under `TreatWarningsAsErrors`. Do not grant `InternalsVisibleTo` to consuming apps, or keep the registration `public` in that setup.
+
+The property reaches the generator through `CompilerVisibleProperty`, which both the `ZeroAlloc.Authorization` and the `ZeroAlloc.Authorization.Generator` packages declare. A project that references the generator as a `ProjectReference` instead of a package adds `<CompilerVisibleProperty Include="ZeroAllocAuthorizationRegistration" />` itself.
 
 ---
 

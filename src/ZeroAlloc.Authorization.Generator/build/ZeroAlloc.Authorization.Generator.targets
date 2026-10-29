@@ -1,3 +1,21 @@
 <Project>
-  <!-- Intentionally empty. Sibling stub for buildTransitive. -->
+  <!--
+    Sibling of buildTransitive/ZeroAlloc.Authorization.Generator.targets, which holds the
+    analyzer filter. Some older SDK + NuGet combos warn when a package ships buildTransitive/
+    without a build/ file.
+  -->
+  <!--
+    Hands the ZeroAllocAuthorizationRegistration property to the generator, which reads it as
+    build_property.ZeroAllocAuthorizationRegistration. Values: public or internal; unset keeps
+    the default. A library that ships [Policy] classes sets it to internal, so its registration
+    does not make an app's AddZeroAllocAuthorization call ambiguous, CS0121.
+
+    Both ZeroAlloc.Authorization, which bundles the generator, and ZeroAlloc.Authorization.Generator
+    declare it, in build and buildTransitive. The Exclude keeps it to one item when several of
+    those files are imported into the same project.
+  -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="ZeroAllocAuthorizationRegistration"
+                             Exclude="@(CompilerVisibleProperty)" />
+  </ItemGroup>
 </Project>

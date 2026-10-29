@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.9...v2.2.0) (2026-10-29)
+
+
+### Features
+
+* **generator:** let a project make the generated registration internal ([#176](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/176)) ([cc5d8d8](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/cc5d8d810e95cb5a697da935ee1f18b14e451003))
+
 ## [2.1.9](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.8...v2.1.9) (2026-10-28)
 
 

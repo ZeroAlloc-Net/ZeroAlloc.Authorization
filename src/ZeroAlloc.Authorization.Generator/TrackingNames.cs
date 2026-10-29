@@ -11,4 +11,5 @@ internal static class TrackingNames
     public const string ReferenceScan = nameof(ReferenceScan);
     public const string EmitInputs = nameof(EmitInputs);
     public const string DiagnosticInputs = nameof(DiagnosticInputs);
+    public const string RegistrationOptions = nameof(RegistrationOptions);
 }

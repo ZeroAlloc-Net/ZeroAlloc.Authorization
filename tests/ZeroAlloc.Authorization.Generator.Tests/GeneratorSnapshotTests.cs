@@ -37,6 +37,13 @@ public sealed record DeleteUser(int Id);
     }
 
     [Fact]
+    public void Basic_WithRegistrationInternal_Snapshot()
+    {
+        // <ZeroAllocAuthorizationRegistration>internal</ZeroAllocAuthorizationRegistration>
+        RunAndVerify(BasicSource, BuildProperties.Registration("internal"));
+    }
+
+    [Fact]
     public void EmptyCompilation_StillEmitsRegistrationWithMarker_Snapshot()
     {
         RunAndVerify("namespace MyApp; public sealed class Nothing { }");
@@ -153,7 +160,7 @@ public sealed record DeleteUser(int Id);
         return references;
     }
 
-    private static void RunAndVerify(string source)
+    private static void RunAndVerify(string source, BuildProperties? properties = null)
     {
         var references = GetStandardReferences();
 
@@ -164,7 +171,7 @@ public sealed record DeleteUser(int Id);
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var generator = new PolicyRegistryGenerator().AsSourceGenerator();
-        var driver = CSharpGeneratorDriver.Create(generator).RunGenerators(compilation);
+        var driver = CSharpGeneratorDriver.Create(new[] { generator }, optionsProvider: properties).RunGenerators(compilation);
         GeneratorSnapshot.Verify(driver);
     }
 }

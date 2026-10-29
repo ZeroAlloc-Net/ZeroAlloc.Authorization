@@ -72,4 +72,12 @@ internal static class Descriptors
         category: "ZeroAlloc.Authorization",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor InvalidRegistrationAccessibility = new(
+        id: "ZAUTH009",
+        title: "Invalid ZeroAllocAuthorizationRegistration value",
+        messageFormat: "The MSBuild property ZeroAllocAuthorizationRegistration is '{0}', which is not a valid value. Use 'public' or 'internal'; until then the generated registration keeps its default accessibility.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

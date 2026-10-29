@@ -76,12 +76,31 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         // runs it once per layer. The empty case must not shadow or clash with the registration
         // of a layer that declares policies, so it is internal, and skipped altogether when a
         // referenced assembly already exposes the registration.
+        //
+        // A compilation with policies emits a public registration, so a host can call the one of
+        // the layer it references. A library that ships policies to apps that have their own sets
+        // ZeroAllocAuthorizationRegistration to internal: two public registrations make the app's
+        // call ambiguous, CS0121.
         var environment = context.CompilationProvider
             .Select(static (c, _) => RegistrationEnvironment.From(c));
 
+        // The ZeroAllocAuthorizationRegistration MSBuild property. The packages mark it
+        // compiler-visible, so it reaches the generator as a global analyzer config option.
+        var registrationOptions = context.AnalyzerConfigOptionsProvider
+            .Select(static (options, _) => RegistrationOptions.From(options))
+            .WithTrackingName(TrackingNames.RegistrationOptions);
+
+        context.RegisterSourceOutput(registrationOptions, static (spc, options) =>
+        {
+            if (options.InvalidValue is { } value)
+            {
+                spc.ReportDiagnostic(DiagnosticInfo.Create(Descriptors.InvalidRegistrationAccessibility, null, value).ToDiagnostic());
+            }
+        });
+
         context.RegisterSourceOutput(
-            emitInputs.Combine(environment),
-            static (spc, x) => Emit(spc, x.Left, x.Right));
+            emitInputs.Combine(environment).Combine(registrationOptions),
+            static (spc, x) => Emit(spc, x.Left.Left, x.Left.Right, x.Right));
     }
 
     private static IncrementalValuesProvider<RequireDiscovery> FindRequires(
@@ -95,13 +114,13 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
             .Where(static x => x is not null)
             .Select(static (x, _) => x!);
 
-    private static void Emit(SourceProductionContext spc, EmitInput input, RegistrationEnvironment environment)
+    private static void Emit(SourceProductionContext spc, EmitInput input, RegistrationEnvironment environment, RegistrationOptions options)
     {
         var isEmpty = input.Policies.Count == 0 && input.Requires.Count == 0;
         if (isEmpty && (!environment.HasDependencyInjection || environment.ReferencedRegistrationExists)) return;
 
         var authorizers = AuthorizerForEmitter.Emit(input.Requires, BuildPolicyByNameMap(input.Policies));
-        var registration = DIRegistrationEmitter.Emit(input.Policies, input.Requires, isEmpty ? "internal" : "public");
+        var registration = DIRegistrationEmitter.Emit(input.Policies, input.Requires, options.AccessibilityFor(isEmpty));
 
         spc.AddSource("ZeroAllocAuthorization.Generated.g.cs", SourceText.From(authorizers + registration, System.Text.Encoding.UTF8));
     }

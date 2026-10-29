@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.2.0...v2.2.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* skip inaccessible types from referenced assemblies in the generator ([#179](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/179)) ([7c1ff97](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/7c1ff97cee4b3646c55f0b55d2b14f4c6ae9b2cf))
+
 ## [2.2.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.1.9...v2.2.0) (2026-10-29)
 
 

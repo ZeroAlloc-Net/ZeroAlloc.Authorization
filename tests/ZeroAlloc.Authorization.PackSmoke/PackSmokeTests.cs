@@ -153,6 +153,8 @@ public sealed class PackSmokeTests : IDisposable
         var appSource = File.ReadAllText(Assert.Single(appGenerated));
         Assert.Contains("public static class GeneratedAuthorizationRegistration", appSource, StringComparison.Ordinal);
         Assert.Contains("AddScoped<global::TestLib.App.AppPolicy>", appSource, StringComparison.Ordinal);
+        // The app's registration also registers the library's policies, found through the reference.
+        Assert.Contains("AddScoped<global::TestLib.Library.LibraryPolicy>", appSource, StringComparison.Ordinal);
 
         var libraryGenerated = Directory.GetFiles(Path.Combine(_workDir, "src/TestLib.Library"), "ZeroAllocAuthorization.Generated.g.cs", SearchOption.AllDirectories);
         var librarySource = File.ReadAllText(Assert.Single(libraryGenerated));

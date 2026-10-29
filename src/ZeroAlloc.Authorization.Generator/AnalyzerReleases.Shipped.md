@@ -22,3 +22,11 @@ Rule ID  | Category                | Severity | Notes
 ZAUTH006 | ZeroAlloc.Authorization | Warning  | [RequireAnyPolicy] with a single policy name
 ZAUTH007 | ZeroAlloc.Authorization | Error    | [RequirePolicy] argument shape doesn't match policy interface
 ZAUTH008 | ZeroAlloc.Authorization | Error    | [Policy] class implements multiple IAuthorizationPolicy variants
+
+## Release 2.2.0
+
+### New Rules
+
+Rule ID  | Category                | Severity | Notes
+---------|-------------------------|----------|-------------------------------------------------
+ZAUTH009 | ZeroAlloc.Authorization | Warning  | Invalid ZeroAllocAuthorizationRegistration value

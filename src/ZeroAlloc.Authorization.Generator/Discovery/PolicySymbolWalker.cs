@@ -26,20 +26,53 @@ internal static class PolicySymbolWalker
     /// <summary>
     /// The policies declared in the compilation's referenced assemblies, in walk order.
     /// </summary>
-    public static EquatableArray<PolicyDiscovery> FindInReferences(Compilation compilation, CancellationToken ct)
+    /// <remarks>
+    /// Only policies the compilation can use are listed: the generated code names them, and an
+    /// internal policy of a referenced assembly would not compile there. The names of the
+    /// policies left out go to <paramref name="inaccessibleNames"/>, so the requests that need
+    /// them can be left out too.
+    /// </remarks>
+    public static EquatableArray<PolicyDiscovery> FindInReferences(
+        Compilation compilation,
+        ISet<string> inaccessibleNames,
+        CancellationToken ct)
     {
         var context = WalkContext.Create(compilation);
         if (context is null) return EquatableArray<PolicyDiscovery>.Empty;
 
+        var within = compilation.Assembly;
         var results = new List<PolicyDiscovery>();
         foreach (var refAsm in compilation.SourceModule.ReferencedAssemblySymbols)
         {
             TypeWalker.Walk(refAsm.GlobalNamespace, type =>
             {
-                if (ProcessType(type, context) is { } found) results.Add(found);
+                if (ProcessType(type, context) is not { } found) return;
+                if (IsUsable(type, within, compilation)) results.Add(found);
+                else if (found.Policy is { } policy) inaccessibleNames.Add(policy.PolicyName);
             }, ct);
         }
         return new EquatableArray<PolicyDiscovery>(results.ToArray());
+    }
+
+    // The policy type and the types of its IAuthorizationPolicy interface are named in the
+    // generated code. Other interfaces of the policy are not.
+    private static bool IsUsable(INamedTypeSymbol type, IAssemblySymbol within, Compilation compilation)
+    {
+        if (!TypeAccess.IsAccessible(type, within, compilation)) return false;
+        foreach (var i in type.AllInterfaces)
+        {
+            var def = i.OriginalDefinition;
+            if (!string.Equals(def.Name, "IAuthorizationPolicy", System.StringComparison.Ordinal)
+                || !string.Equals(def.ContainingNamespace.ToDisplayString(), "ZeroAlloc.Authorization", System.StringComparison.Ordinal))
+            {
+                continue;
+            }
+            foreach (var arg in i.TypeArguments)
+            {
+                if (!TypeAccess.IsAccessible(arg, within, compilation)) return false;
+            }
+        }
+        return true;
     }
 
     private sealed record WalkContext(

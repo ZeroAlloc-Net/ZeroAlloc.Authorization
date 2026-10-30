@@ -11,7 +11,7 @@
     <ProjectReference Include="..\..\src\ZeroAlloc.Authorization\ZeroAlloc.Authorization.csproj"
                       SetTargetFramework="TargetFramework=net10.0" />
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
     <!-- Re-attach the generator so GeneratedAuthorizerBenchmarks measures the emitted
          AuthorizerFor<T>. ZeroAlloc.Authorization references it with PrivateAssets="all". -->
     <ProjectReference Include="..\..\src\ZeroAlloc.Authorization.Generator\ZeroAlloc.Authorization.Generator.csproj"

@@ -89,3 +89,37 @@ jobs:
       release-assets: false
     secrets:
       NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+  # Builds the release tag and attaches a CycloneDX SBOM of the solution to its GitHub
+  # release. release-please created that release in the release-please job, and this
+  # workflow runs on main, so the tag comes from that job's tag_name output. It waits
+  # for publish, so an SBOM is only attached to a release that reached nuget.org.
+  sbom:
+    needs: [release-please, publish]
+    if: needs.release-please.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Build the release
+        run: dotnet build ZeroAlloc.Authorization.slnx --configuration Release -p:Version=${{ needs.release-please.outputs.version }}
+
+      - name: Attach the SBOM to the GitHub release
+        uses: MarcelRoozekrans/ci-baseline/actions/sbom@v1
+        with:
+          solution: ZeroAlloc.Authorization.slnx
+          tag: ${{ needs.release-please.outputs.tag_name }}

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.2.1...v2.2.2) (2026-11-06)
+
+
+### Bug Fixes
+
+* keep the registration internal when a project declares no policies itself ([#185](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/185)) ([84557af](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/84557af725d65679e7a5812e0e6b650cb5a10fbb)), closes [#181](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/181)
+
 ## [2.2.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.2.0...v2.2.1) (2026-10-29)
 
 

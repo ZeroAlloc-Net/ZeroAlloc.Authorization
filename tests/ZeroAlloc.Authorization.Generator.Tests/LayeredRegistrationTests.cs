@@ -121,6 +121,23 @@ public sealed class LayeredRegistrationTests
         Assert.True(HostRegistersPolicy(host, kernel, application), "the host's call must register the policies of the policy layer");
     }
 
+    // A library that only references an assembly with policies, as AI.Sentinel is for its
+    // consumers, registers those policies without declaring any. Its registration must stay out of
+    // its public surface, whether or not the project asks for a public one.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("public")]
+    public void LibraryDeclaringNothing_ReferencingPolicies_KeepsItsRegistrationInternal(string? registration)
+    {
+        var shared = Build("Shared", Policies, false);
+        var library = Build("Library", Plain, true, registration, shared);
+
+        Assert.Contains("internal static class GeneratedAuthorizationRegistration", library.Generated);
+        Assert.DoesNotContain("public static class GeneratedAuthorizationRegistration", library.Generated);
+        Assert.Contains("AdminPolicy", library.Generated);
+        Assert.Empty(library.Diagnostics);
+    }
+
     [Fact]
     public void LowerLayerWithoutPolicies_KeepsItsRegistrationInternal()
     {

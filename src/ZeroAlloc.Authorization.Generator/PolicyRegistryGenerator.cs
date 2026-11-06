@@ -78,7 +78,7 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         // of a layer that declares policies, so it is internal, and skipped altogether when a
         // referenced assembly already exposes the registration.
         //
-        // A compilation with policies emits a public registration, so a host can call the one of
+        // A compilation with policies of its own emits a public registration, so a host can call the one of
         // the layer it references. A library that ships policies to apps that have their own sets
         // ZeroAllocAuthorizationRegistration to internal: two public registrations make the app's
         // call ambiguous, CS0121.
@@ -121,7 +121,12 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
         if (isEmpty && (!environment.HasDependencyInjection || environment.ReferencedRegistrationExists)) return;
 
         var authorizers = AuthorizerForEmitter.Emit(input.Requires, BuildPolicyByNameMap(input.Policies));
-        var registration = DIRegistrationEmitter.Emit(input.Policies, input.Requires, options.AccessibilityFor(isEmpty));
+
+        // A compilation that declares nothing itself registers only what its references declare.
+        // That is the business of the app that calls it, so the registration stays internal: a
+        // public one would put another assembly's policies on a library's surface, fail its
+        // documentation check, and make an app's own call ambiguous, CS0121.
+        var registration = DIRegistrationEmitter.Emit(input.Policies, input.Requires, options.AccessibilityFor(isEmpty || !input.DeclaresOwn));
 
         spc.AddSource("ZeroAllocAuthorization.Generated.g.cs", SourceText.From(authorizers + registration, System.Text.Encoding.UTF8));
     }
@@ -262,7 +267,7 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
     /// <summary>
     /// What the source is emitted from: the policies and requests without their locations.
     /// </summary>
-    private sealed record EmitInput(EquatableArray<PolicyInfo> Policies, EquatableArray<RequireInfo> Requires)
+    private sealed record EmitInput(EquatableArray<PolicyInfo> Policies, EquatableArray<RequireInfo> Requires, bool DeclaresOwn)
     {
         public static EmitInput From(AuthorizationModel model)
         {
@@ -286,7 +291,8 @@ public sealed class PolicyRegistryGenerator : IIncrementalGenerator
 
             return new EmitInput(
                 new EquatableArray<PolicyInfo>(policies.ToArray()),
-                new EquatableArray<RequireInfo>(requires.ToArray()));
+                new EquatableArray<RequireInfo>(requires.ToArray()),
+                model.DeclaresOwn);
         }
     }
 }

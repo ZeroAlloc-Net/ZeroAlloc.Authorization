@@ -9,9 +9,11 @@ namespace ZeroAlloc.Authorization.Generator.Discovery;
 /// Everything the generator found: this compilation's policies and requests, then those of its
 /// references, each once.
 /// </summary>
+/// <param name="DeclaresOwn">Whether this compilation declares a policy or a request itself, as opposed to only inheriting them from its references.</param>
 internal sealed record AuthorizationModel(
     EquatableArray<PolicyDiscovery> Policies,
-    EquatableArray<RequireDiscovery> Requires)
+    EquatableArray<RequireDiscovery> Requires,
+    bool DeclaresOwn)
 {
     public static AuthorizationModel Build(
         ImmutableArray<PolicyDiscovery> sourcePolicies,
@@ -31,11 +33,13 @@ internal sealed record AuthorizationModel(
                 sourceRequirePolicies.Concat(sourceRequireAnyPolicies).OrderBy(static r => r.TypeLocation, LocationInfo.Order),
                 static r => r.FullyQualifiedTypeName);
 
+        var declaresOwn = policies.Count > 0 || requires.Count > 0;
         policies.AddRange(references.Policies);
         requires.AddRange(references.Requires);
         return new AuthorizationModel(
             new EquatableArray<PolicyDiscovery>(policies.ToArray()),
-            new EquatableArray<RequireDiscovery>(requires.ToArray()));
+            new EquatableArray<RequireDiscovery>(requires.ToArray()),
+            declaresOwn);
     }
 
     private static List<T> Distinct<T>(IEnumerable<T> items, System.Func<T, string> key)

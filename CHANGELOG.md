@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.2.2...v2.3.0) (2026-11-11)
+
+
+### Features
+
+* add net11.0 target ([#191](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/191)) ([84da801](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/84da801347cf233a9919051f6567738d265284b0))
+
+
+### Documentation
+
+* add context7.json to claim the library on Context7 ([#193](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/193)) ([1045638](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/104563897138aad298c2bd8dc4d63f2531dd1779))
+
 ## [2.2.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.2.1...v2.2.2) (2026-11-06)
 
 

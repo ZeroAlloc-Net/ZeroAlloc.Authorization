@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <RootNamespace>ZeroAlloc.Authorization.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
     <NoWarn>$(NoWarn);MA0074;NU1608;NU1701;MA0002;MA0004;MA0047;MA0048</NoWarn>

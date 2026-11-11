@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PublishAot>true</PublishAot>
@@ -24,7 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ZeroAlloc.Authorization\ZeroAlloc.Authorization.csproj"
-                      SetTargetFramework="TargetFramework=net10.0" />
+                      SetTargetFramework="TargetFramework=net11.0" />
     <!-- Direct analyzer wiring so the generator runs for this sample. The
          ZeroAlloc.Authorization project references the generator with
          PrivateAssets="all", which intentionally hides the analyzer from

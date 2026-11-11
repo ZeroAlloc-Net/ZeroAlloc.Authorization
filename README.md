@@ -23,7 +23,7 @@ dotnet add package ZeroAlloc.Authorization
 dotnet add package Microsoft.Extensions.DependencyInjection # the generated registrations target it
 ```
 
-Targets `net8.0`, `net9.0` and `net10.0`. The source generator ships inside the package. ASP.NET Core
+Targets `net8.0`, `net9.0`, `net10.0` and `net11.0`. The source generator ships inside the package. ASP.NET Core
 and generic-host apps already reference the DI package.
 
 ## Quick start

@@ -6,6 +6,10 @@
     <!-- Integration test packs and consumes real .nupkg files; treat as
          non-parallel so concurrent runs don't churn the temp NuGet feed. -->
     <ParallelizeTestCollections>false</ParallelizeTestCollections>
+    <!-- Every pack here restores and builds the real src projects into their own obj
+         folders. With two target frameworks, dotnet test runs both at once and the two
+         runs race on those folders, so run the target frameworks one after the other. -->
+    <TestTfmsInParallel>false</TestTfmsInParallel>
     <!-- Suppress analyzer noise common to test scaffolding code:
          MA0004 ConfigureAwait, MA0011 IFormatProvider, MA0002 string comparer,
          MA0048 file name must match type, MA0051 method length,

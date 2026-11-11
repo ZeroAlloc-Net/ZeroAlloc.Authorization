@@ -441,7 +441,11 @@ public sealed class PackSmokeTests : IDisposable
 
     private static (int ExitCode, string StdOut, string StdErr) RunDotnet(string args, string workingDir)
     {
-        var psi = new ProcessStartInfo("dotnet", args)
+        // --disable-build-servers: the SDK leaves an MSBuild node and the Roslyn compiler server
+        // running after a build, and both inherit the redirected stdout and stderr handles. The
+        // reads below then wait for those servers to idle out, which on SDK 11 blocked the test
+        // for the whole 15 minute node timeout, so the child build must not start any.
+        var psi = new ProcessStartInfo("dotnet", args + " --disable-build-servers")
         {
             WorkingDirectory = workingDir,
             RedirectStandardOutput = true,

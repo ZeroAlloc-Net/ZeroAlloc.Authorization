@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.3.0...v2.3.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* embed PDBs so Go to Definition shows the package source ([#207](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/issues/207)) ([3d535f7](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/3d535f77a6b1e6fc1fed2b3cb5c64f715a86abc2))
+
 ## [2.3.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.2.2...v2.3.0) (2026-11-11)
 
 

@@ -14,12 +14,6 @@
     <PackageTags>authorization;source-generator;analyzer;dotnet;zeroalloc</PackageTags>
     <!-- No runtime payload — ship the analyzer DLL only, not in lib/. -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
-    <!-- Override repo-wide IncludeSymbols=true: an analyzer-only package with no lib/
-         payload and no transitive dependencies has nothing to put in a .snupkg,
-         which makes NuGet fail with NU5017 ("Cannot create a package that has no
-         dependencies nor content"). The generator DLL lives at analyzers/dotnet/cs/,
-         which is outside the lib/ paths the snupkg format mirrors. -->
-    <IncludeSymbols>false</IncludeSymbols>
     <!-- Suppress the "your package has no lib/ or ref/ folder" warning. -->
     <NoWarn>$(NoWarn);NU5128</NoWarn>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>

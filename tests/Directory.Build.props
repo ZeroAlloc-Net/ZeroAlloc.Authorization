@@ -5,7 +5,7 @@
   <!-- Code coverage for every test project. CI runs dotnet test with coverage.runsettings
        and uploads the Cobertura report to Codecov. -->
   <ItemGroup>
-    <PackageReference Include="coverlet.collector" Version="10.1.0">
+    <PackageReference Include="coverlet.collector" Version="10.1.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

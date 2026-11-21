@@ -85,4 +85,4 @@ If you need an integration that does not exist yet, write a host. The dispatch s
 
 ## Targets
 
-`net8.0`, `net9.0`, `net10.0`. AOT-compatible — `<IsAotCompatible>true</IsAotCompatible>` is set on the main library and the `samples/ZeroAlloc.Authorization.AotSmoke/` app is exercised on every CI run with `PublishAot=true`.
+`net10.0` and `net11.0`. AOT-compatible — `<IsAotCompatible>true</IsAotCompatible>` is set on the main library and the `samples/ZeroAlloc.Authorization.AotSmoke/` app is exercised on every CI run with `PublishAot=true`.

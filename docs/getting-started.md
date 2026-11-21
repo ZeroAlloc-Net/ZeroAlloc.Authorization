@@ -12,7 +12,7 @@ sidebar_position: 2
 dotnet add package ZeroAlloc.Authorization
 ```
 
-Targets `net8.0`, `net9.0`, `net10.0`. AOT-compatible. The package bundles a Roslyn source generator — no separate `*.Generator` install.
+Targets `net10.0` and `net11.0`. AOT-compatible. The package bundles a Roslyn source generator — no separate `*.Generator` install.
 
 ## Write your first policy
 

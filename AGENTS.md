@@ -1,6 +1,6 @@
 # AGENTS.md: ZeroAlloc.Authorization
 
-Source-generated authorization policies for any .NET host. Two NuGet packages ship from `src/`: `ZeroAlloc.Authorization` (the attributes, `ISecurityContext`, `IAuthorizationPolicy`, `AuthorizerFor<T>`; it also bundles the generator) and `ZeroAlloc.Authorization.Generator` (the Roslyn generator alone, for the split-package setup). Consumers are ASP.NET hosts, mediators and agent tool-call dispatchers. The library targets `net8.0` to `net11.0`; the generator targets `netstandard2.0`.
+Source-generated authorization policies for any .NET host. Two NuGet packages ship from `src/`: `ZeroAlloc.Authorization` (the attributes, `ISecurityContext`, `IAuthorizationPolicy`, `AuthorizerFor<T>`; it also bundles the generator) and `ZeroAlloc.Authorization.Generator` (the Roslyn generator alone, for the split-package setup). Consumers are ASP.NET hosts, mediators and agent tool-call dispatchers. The library targets `net10.0` and `net11.0`; the generator targets `netstandard2.0`.
 
 ## Layout
 - `src/ZeroAlloc.Authorization.Generator` emits the DI registration and one `AuthorizerFor<T>` dispatcher per request type. Its `ZAUTH001` to `ZAUTH009` diagnostics are tracked in `AnalyzerReleases.Shipped.md` and `AnalyzerReleases.Unshipped.md`.
@@ -10,7 +10,7 @@ Source-generated authorization policies for any .NET host. Two NuGet packages sh
 - `apicompat-suppressions.xml` lists intentional breaking changes against the released baseline, used by the shared `api-compat` workflow.
 
 ## Build and test
-Prerequisite: the .NET SDK pinned in `global.json` (11.0.100, roll forward `latestMinor`). Test projects target `net10.0` and `net11.0`, so both the .NET 10 and the .NET 11 runtime must be installed. The library also targets `net8.0` and `net9.0`; CI installs those SDKs for building.
+Prerequisite: the .NET SDK pinned in `global.json` (11.0.100, roll forward `latestMinor`). Test projects target `net10.0` and `net11.0`, so both the .NET 10 and the .NET 11 runtime must be installed.
 
 CI job `build` in `.github/workflows/ci.yml`, in this order:
 - `dotnet restore ZeroAlloc.Authorization.slnx`
@@ -31,7 +31,6 @@ Inner loop (verified locally, no CI job runs these as written):
 ## Conventions and gotchas
 - Pack needs a version. `Directory.Build.props` fails pack with `ZAVERSION001` when no `-p:Version` was given and with `ZAVERSION002` when the built assemblies carry another version. With `--no-build`, pass the same `-p:Version` to the build step.
 - Warnings are errors, and the public API is tracked: adding or changing a public member without a `PublicAPI.Unshipped.txt` entry breaks the build (`RS0016`, `RS0017`). Do the same for analyzer rules in `AnalyzerReleases.Unshipped.md`. Do not move entries to the `Shipped` files by hand: the release PR does that, and the `release-tracking` CI job checks it.
-- The `net8.0` and `net9.0` targets of `ZeroAlloc.Authorization` are built but not run by any test project.
 - `AllocationBudgetTests` assert 0 bytes per check on the allow and deny paths. A change in the evaluation path that allocates fails them; fix the path, do not raise a budget.
 - Do not reference the generator by a hard-coded `bin` path. Projects that need it as an analyzer use a `ProjectReference` with `OutputItemType="Analyzer"` and `ReferenceOutputAssembly="false"`, as the test and sample projects do.
 - A changed generator output means updating the Verify snapshots in `Snapshots/`. Review every `*.received.*` diff before accepting it as `*.verified.*`.

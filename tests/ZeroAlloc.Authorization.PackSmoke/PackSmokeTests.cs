@@ -105,6 +105,28 @@ public sealed class PackSmokeTests : IDisposable
         Assert.DoesNotContain("CS0234", build.StdOut, StringComparison.Ordinal);
     }
 
+    // The package ships the supported runtimes only. net8.0 and net9.0 went out of support on
+    // 2026-11-10 and were dropped in the next major; a lib/ folder for any other framework means
+    // the TargetFrameworks list and the documented support drifted apart.
+    [Fact]
+    public void Package_ships_net10_and_net11_lib_assemblies_only()
+    {
+        var repoRoot = LocateRepoRoot();
+        PackProject(Path.Combine(repoRoot, "src/ZeroAlloc.Authorization/ZeroAlloc.Authorization.csproj"));
+
+        var nupkg = Path.Combine(_feed, $"ZeroAlloc.Authorization.{_testVersion}.nupkg");
+        using var archive = System.IO.Compression.ZipFile.OpenRead(nupkg);
+        var libFrameworks = archive.Entries
+            .Where(e => e.FullName.StartsWith("lib/", StringComparison.Ordinal)
+                        && e.FullName.EndsWith(".dll", StringComparison.Ordinal))
+            .Select(e => e.FullName.Split('/')[1])
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["net10.0", "net11.0"], libFrameworks);
+    }
+
     [Fact]
     public void Bundled_only_pattern_still_works_for_2_0_0_consumers()
     {

@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.3.1...v3.0.0) (2026-11-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* net8.0 and net9.0 assets are no longer shipped; move to net10.0 or net11.0, or stay on 2.x. See the migration notes in the release.
+
+### Features
+
+* target net10.0 and net11.0, drop net8.0 and net9.0 ([54f910a](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/commit/54f910a9b199785ea0e7128574cbea05eca0e364))
+
 ## [2.3.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Authorization/compare/v2.3.0...v2.3.1) (2026-11-16)
 
 

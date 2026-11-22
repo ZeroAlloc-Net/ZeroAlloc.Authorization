@@ -33,9 +33,10 @@ CI job `sdk10-consumer` needs a 10.0.1xx SDK; `tests/ZeroAlloc.Authorization.Sdk
 consumer of the packed packages with Roslyn 5.0:
 
 ```bash
-dotnet pack src/ZeroAlloc.Authorization -c Release -o artifacts -p:Version=9.9.9-local.sha$(git rev-parse --short HEAD)
+v=9.9.9-local.sha$(git rev-parse --short HEAD).$(date +%s)
+dotnet pack src/ZeroAlloc.Authorization -c Release -o artifacts -p:Version="$v"
 cd tests/ZeroAlloc.Authorization.Sdk10Smoke/Consumer
-dotnet run -c Release -p:ZeroAllocAuthorizationVersion=9.9.9-local.sha$(git rev-parse --short HEAD)
+dotnet run -c Release -p:ZeroAllocAuthorizationVersion="$v"
 ```
 
 CI job `roslyn-floor` calls the shared `roslyn-floor.yml` from ZeroAlloc-Net/.github: it packs the

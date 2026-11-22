@@ -127,7 +127,7 @@ path, a one-time cache fill.
 - A behaviour change gets a `## Behaviour change` section in the PR body.
 - Conventional Commits with release-please. Subjects start lowercase, body lines stay within 100
   characters, and a body never contains nested parentheses: release-please drops the whole commit.
-- Local packs use `9.9.9-local.sha$(git rev-parse --short HEAD)`. After a release, verify the package on NuGet.
+- Local packs use `9.9.9-local.<sha>`. After a release, verify the package on NuGet.
 - Fix review findings in the PR; file an issue only for what cannot go in it.
 
 Full rules, template wiring lessons and the reasons behind each rule: https://github.com/ZeroAlloc-Net/.github/blob/main/AGENTS.md

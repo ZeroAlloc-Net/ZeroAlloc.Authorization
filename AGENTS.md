@@ -28,7 +28,26 @@ Inner loop (verified locally, no CI job runs these as written):
 - `dotnet build ZeroAlloc.Authorization.slnx -c Release -p:Version=1.0.0-local`
 - `dotnet test tests/ZeroAlloc.Authorization.Tests -c Release --no-build -f net10.0 --filter "FullyQualifiedName~AllocationBudgetTests"`
 
+CI job `sdk10-consumer` needs a 10.0.1xx SDK; `tests/ZeroAlloc.Authorization.Sdk10Smoke/global.json` pins
+10.0.100 with `rollForward: latestPatch`, so a newer band cannot stand in for it. It builds and runs a
+consumer of the packed packages with Roslyn 5.0:
+
+```bash
+v=9.9.9-local.sha$(git rev-parse --short HEAD).$(date +%s)
+dotnet pack src/ZeroAlloc.Authorization -c Release -o artifacts -p:Version="$v"
+cd tests/ZeroAlloc.Authorization.Sdk10Smoke/Consumer
+dotnet run -c Release -p:ZeroAllocAuthorizationVersion="$v"
+```
+
+CI job `roslyn-floor` calls the shared `roslyn-floor.yml` from ZeroAlloc-Net/.github: it packs the
+solution and fails when a packed DLL references Roslyn above 5.0.0.
+
 ## Conventions and gotchas
+- The generator references `Microsoft.CodeAnalysis.CSharp` 5.0.0, the compiler of SDK band 10.0.1xx, the
+  oldest supported SDK. A compiler older than the Roslyn the generator references skips it with `CS9057`,
+  and nothing is generated. The shared Renovate preset holds it below 5.1. If a newer Roslyn API is
+  needed, change the code; raise the floor only together with the minimum SDK. Test projects may use a
+  newer Roslyn.
 - Pack needs a version. `Directory.Build.props` fails pack with `ZAVERSION001` when no `-p:Version` was given and with `ZAVERSION002` when the built assemblies carry another version. With `--no-build`, pass the same `-p:Version` to the build step.
 - Warnings are errors, and the public API is tracked: adding or changing a public member without a `PublicAPI.Unshipped.txt` entry breaks the build (`RS0016`, `RS0017`). Do the same for analyzer rules in `AnalyzerReleases.Unshipped.md`. Do not move entries to the `Shipped` files by hand: the release PR does that, and the `release-tracking` CI job checks it.
 - `AllocationBudgetTests` assert 0 bytes per check on the allow and deny paths. A change in the evaluation path that allocates fails them; fix the path, do not raise a budget.

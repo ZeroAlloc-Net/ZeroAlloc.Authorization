@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Builds a consumer of the packed ZeroAlloc.Authorization package(s) with the oldest supported
+    .NET SDK band, 10.0.1xx, whose compiler is Roslyn 5.0. The package bundles the generator in analyzers/dotnet/cs.
+    A generator built against a newer Roslyn than the compiler that loads it is skipped with
+    CS9057, and the build then fails because the generated code is missing.
+
+    The parent folder's global.json pins the 10.0.1xx band with rollForward latestPatch, so a
+    newer band cannot stand in for it. Run locally with a 10.0.1xx SDK installed:
+      dotnet pack ZeroAlloc.Authorization.slnx -c Release -o artifacts -p:Version=9.9.9-local.<sha>
+      cd tests/ZeroAlloc.Authorization.Sdk10Smoke/Consumer
+      dotnet run -c Release -p:ZeroAllocAuthorizationVersion=9.9.9-local.<sha>
+    Not part of the solution; the sdk10-consumer job in ci.yml runs it.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <WarningsAsErrors>$(WarningsAsErrors);CS8032;CS9057</WarningsAsErrors>
+  </PropertyGroup>
+
+  <Target Name="RequireZeroAllocAuthorizationVersion" BeforeTargets="CollectPackageReferences">
+    <Error Condition="'$(ZeroAllocAuthorizationVersion)' == ''"
+           Text="Pass the version of the packed packages: -p:ZeroAllocAuthorizationVersion=..." />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="ZeroAlloc.Authorization" Version="[$(ZeroAllocAuthorizationVersion)]" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+  </ItemGroup>
+</Project>

@@ -29,6 +29,6 @@
 
   <ItemGroup>
     <PackageReference Include="ZeroAlloc.Authorization" Version="[$(ZeroAllocAuthorizationVersion)]" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
   </ItemGroup>
 </Project>
